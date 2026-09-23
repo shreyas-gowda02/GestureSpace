@@ -44,9 +44,12 @@ export class CameraBackground {
     this.mesh.visible = false;
   }
 
-  /** Cheap to call every frame: only touches uniforms when the mapping or size changed. */
-  sync(viewport: ViewportMapper, drawingBuffer: THREE.Vector2): void {
-    this.mesh.visible = viewport.ready;
+  /**
+   * Cheap to call every frame: only touches uniforms when the mapping or size changed.
+   * `hasVideo` is false during fixture playback without a camera (nothing to sample).
+   */
+  sync(viewport: ViewportMapper, drawingBuffer: THREE.Vector2, hasVideo: boolean): void {
+    this.mesh.visible = hasVideo && viewport.ready;
     if (viewport.version === this.syncedVersion && drawingBuffer.equals(this.syncedBuffer)) return;
     syncCoverUniforms(this.uniforms, viewport, drawingBuffer);
     this.syncedVersion = viewport.version;

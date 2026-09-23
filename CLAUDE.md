@@ -35,8 +35,8 @@ gesture engine and ONE renderer. Everything runs locally; no backend, no uploads
 | ----- | -------------------------------------------------------------------- | ------------------------------------------------------ | -------------------- |
 | 0     | Foundation (tooling, shell, lean structure)                          | ✅ done                                                | `18c7bbb`, `f4d6d00` |
 | 1     | Camera (permission flow, mirrored cover-crop background)             | ✅ done — **awaiting user's real-webcam confirmation** | `80f5c7f`            |
-| 2     | Hand tracker                                                         | ⏭ **next**                                             | —                    |
-| 3     | Smoothing + gestures (**M0** demo)                                   | ⬜                                                     | —                    |
+| 2     | Hand tracker                                                         | ✅ done — **awaiting user's real-hand check**          | `phase-2` commit     |
+| 3     | Smoothing + gestures (**M0** demo)                                   | ⏭ **next**                                             | —                    |
 | 4     | Spatial cursor + ModeController                                      | ⬜                                                     | —                    |
 | 5     | Voxel Builder (**M1** demo)                                          | ⬜                                                     | —                    |
 | 6     | Two-hand transform core                                              | ⬜                                                     | —                    |
@@ -52,13 +52,19 @@ gesture engine and ONE renderer. Everything runs locally; no backend, no uploads
 **What works today:** app shell (top bar, 7-mode dock with keys 1–7, collapsible tool panel with
 per-mode gesture help, status bar), camera permission/error/stopped screens, live mirrored
 full-bleed camera rendered inside Three.js with object-fit-cover cropping, Stop/Start camera, FPS
-counter, dev debug counters (`window.__gs_debug`). 46 unit tests passing.
+counter, dev debug counters (`window.__gs_debug`). **Phase 2:** MediaPipe HandLandmarker (GPU→CPU,
+loads once when the camera first starts, ~0.8 s), live two-hand skeleton overlay aligned to the
+video (right = turquoise, left = magenta, with side + confidence label), "Loading hand tracker…" /
+"Show your hand to the camera" notices, tracker error + Retry, status bar "Right: tracked · Left: —",
+Debug panel (backtick key) with render/inference rates, inference ms, skipped frames, delegate,
+per-hand data, and a landmark fixture recorder/player. 62 tests (unit + integration) passing.
 
-**What does not work yet:** no hand tracking, no gestures, no experiences (dock only switches the
+**What does not work yet:** no smoothing (skeleton jitters slightly), no gestures, no experiences (dock only switches the
 label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings buttons only toggle state
 (panels not built).
 
-**Pushed to GitHub:** yes, `main` is in sync with `origin/main` as of commit `80f5c7f`.
+**Pushed to GitHub:** up to `6e88c4d` (CLAUDE.md handoff). The Phase 2 commit is **local only**
+until the user runs `git push`.
 
 ---
 
@@ -68,8 +74,10 @@ label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings button
 2. `npm install` if `node_modules/` is missing (postinstall copies MediaPipe WASM into
    `public/mediapipe/wasm/`).
 3. Run the phase gate once to confirm a green baseline (see §5).
-4. Ask the user whether the Phase 1 real-webcam check passed (mirrored, full-screen, no stretching).
-5. Start **Phase 2 — Hand tracker** (§7 below). Stop after it and report in the §5 format.
+4. Ask the user for the pending real-camera checks: Phase 1 (mirrored, full-screen, no stretching)
+   and Phase 2 (raise PHYSICAL right hand → overlay says "Right"; if it says "Left", flip
+   `TUNING.tracker.HANDEDNESS_LABEL_SWAP` and record the result in D16).
+5. Start **Phase 3 — Smoothing + gestures** (§7 below). Stop after it and report in the §5 format.
 
 The user replies **"continue"** to approve moving to the next phase. Never start the next phase
 without that.
@@ -130,24 +138,30 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 
 ## 6. Decisions & deviations log (agreed — do not re-litigate)
 
-| #   | Decision                                                                                                                                       | Why                                                                                                           |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| D1  | Project lives at repo root, not in a `gesturespace/` subfolder                                                                                 | Repo already existed                                                                                          |
-| D2  | Current stable deps: React 19, TS 6.0, Vite 8, Vitest 5, ESLint 10 (flat), three 0.186, @mediapipe/tasks-vision 1.0.1, zustand 5, idb-keyval 6 | Spec says use current stable. typescript-eslint supports TS < 6.1 — don't bump TS past 6.0.x without checking |
-| D3  | **Lean folder map** (AGENTS.md) replaces spec §6; ~100 placeholder files deleted                                                               | User request: fewer files                                                                                     |
-| D4  | Single `tsconfig.json` (no app/node split); Prettier config lives in `package.json`; `typecheck` = `tsc --noEmit`                              | Fewer files                                                                                                   |
-| D5  | Feature flags live in `config/tuning.ts` (`FEATURE_FLAGS`), not a separate file                                                                | Fewer files                                                                                                   |
-| D6  | `ModeContext`/`SpatialMode` types go in `src/modes/types.ts` (Phase 4), not `core/types.ts`                                                    | They depend on Three.js + Phase 1–4 classes                                                                   |
-| D7  | Mode registry (`modes/registry.ts`) already holds metadata (name, hotkey, tagline, help); factories added in Phase 4                           | Dock/help needed it in Phase 0                                                                                |
-| D8  | No Google Fonts — system font stack (Inter if installed)                                                                                       | CSP `default-src 'self'`                                                                                      |
-| D9  | Camera colours pass through unconverted (no colorspace chunk in background shader)                                                             | Feed looks identical to the raw camera                                                                        |
-| D10 | Camera auto-retries without resolution constraints if 1280×720 is rejected                                                                     | Better than failing on odd webcams                                                                            |
-| D11 | `chunkSizeWarningLimit: 1000` in Vite; three.js makes the bundle ~770 kB                                                                       | Code-splitting deferred to Phase 13                                                                           |
-| D12 | Render loop runs **only while the camera is streaming**; canvas is `visibility:hidden` otherwise                                               | Spec §21.3 "camera stopped: everything paused"                                                                |
-| D13 | Playwright builds with `vite build --mode test` so `window.__gs_debug` exists in E2E                                                           | Leak/duplication assertions                                                                                   |
-| D14 | Debug counters: `coreCreated/Disposed`, `renderersCreated`, `renderLoopsStarted/Active`, `cameraStreamsStarted/Active`, `trackersCreated`      | E2E proves nothing is duplicated                                                                              |
-| D15 | `.claude/launch.json` is committed (dev-server preview config); other `.claude/*` ignored                                                      | Shared tooling config                                                                                         |
-| D16 | `HANDEDNESS_LABEL_SWAP = true` is a **provisional default** — must be verified with a real hand in Phase 2                                     | Spec §8                                                                                                       |
+| #   | Decision                                                                                                                                                                  | Why                                                                                                           |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| D1  | Project lives at repo root, not in a `gesturespace/` subfolder                                                                                                            | Repo already existed                                                                                          |
+| D2  | Current stable deps: React 19, TS 6.0, Vite 8, Vitest 5, ESLint 10 (flat), three 0.186, @mediapipe/tasks-vision 1.0.1, zustand 5, idb-keyval 6                            | Spec says use current stable. typescript-eslint supports TS < 6.1 — don't bump TS past 6.0.x without checking |
+| D3  | **Lean folder map** (AGENTS.md) replaces spec §6; ~100 placeholder files deleted                                                                                          | User request: fewer files                                                                                     |
+| D4  | Single `tsconfig.json` (no app/node split); Prettier config lives in `package.json`; `typecheck` = `tsc --noEmit`                                                         | Fewer files                                                                                                   |
+| D5  | Feature flags live in `config/tuning.ts` (`FEATURE_FLAGS`), not a separate file                                                                                           | Fewer files                                                                                                   |
+| D6  | `ModeContext`/`SpatialMode` types go in `src/modes/types.ts` (Phase 4), not `core/types.ts`                                                                               | They depend on Three.js + Phase 1–4 classes                                                                   |
+| D7  | Mode registry (`modes/registry.ts`) already holds metadata (name, hotkey, tagline, help); factories added in Phase 4                                                      | Dock/help needed it in Phase 0                                                                                |
+| D8  | No Google Fonts — system font stack (Inter if installed)                                                                                                                  | CSP `default-src 'self'`                                                                                      |
+| D9  | Camera colours pass through unconverted (no colorspace chunk in background shader)                                                                                        | Feed looks identical to the raw camera                                                                        |
+| D10 | Camera auto-retries without resolution constraints if 1280×720 is rejected                                                                                                | Better than failing on odd webcams                                                                            |
+| D11 | `chunkSizeWarningLimit: 1000` in Vite; three.js makes the bundle ~770 kB                                                                                                  | Code-splitting deferred to Phase 13                                                                           |
+| D12 | Render loop runs **only while the camera is streaming or a fixture is playing**; canvases are `visibility:hidden` otherwise                                               | Spec §21.3 "camera stopped: everything paused"                                                                |
+| D13 | Playwright builds with `vite build --mode test` so `window.__gs_debug` exists in E2E                                                                                      | Leak/duplication assertions                                                                                   |
+| D14 | Debug counters: `coreCreated/Disposed`, `renderersCreated`, `renderLoopsStarted/Active`, `cameraStreamsStarted/Active`, `trackersCreated`                                 | E2E proves nothing is duplicated                                                                              |
+| D15 | `.claude/launch.json` is committed (dev-server preview config); other `.claude/*` ignored                                                                                 | Shared tooling config                                                                                         |
+| D16 | `HANDEDNESS_LABEL_SWAP = true` (per MediaPipe docs: labels assume a mirrored input; we feed raw video) — **user must still confirm with a real hand**                     | Spec §8                                                                                                       |
+| D17 | Fixtures store tracker-native `RawDetection`s (not `HandFrame`s), so replays go through the whole pipeline incl. Phase 3 smoothing                                        | Better tests; spec said "HandFrame sequences"                                                                 |
+| D18 | `@mediapipe/tasks-vision` is **dynamically imported** by `HandTracker` → separate ~150 kB chunk, fetched when the camera first runs                                       | Faster first paint                                                                                            |
+| D19 | `CameraStatus` has no `'loading'`; tracker state is separate in the store (`trackerStatus`, `trackerError`, `trackerDelegate`, `handCount`)                               | Camera and tracker fail independently                                                                         |
+| D20 | Synthetic fixture generator `scripts/make-synthetic-fixture.mjs` → committed `tests/fixtures/landmarks/synthetic-two-hands.json`; `tests/fixtures` excluded from Prettier | Test + demo the pipeline without a camera (browser pane blocks webcams)                                       |
+| D21 | Ambiguous handedness (both hands same label) is resolved by position: user's right hand = lower raw x                                                                     | MediaPipe occasionally mislabels                                                                              |
+| D22 | Model/WASM paths are `BASE_URL`-relative (`models/…`, `mediapipe/wasm`)                                                                                                   | Works on sub-path deploys                                                                                     |
 
 ---
 
@@ -156,30 +170,9 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 Files listed are the planned **lean** files (see AGENTS.md folder map). Pure logic gets Vitest tests
 in the same phase.
 
-### Phase 2 — Hand tracker
+### Phase 2 — Hand tracker ✅ DONE
 
-- `vision/HandTracker.ts`: load `HandLandmarker` **once** via
-  `FilesetResolver.forVisionTasks('/mediapipe/wasm')`, model `/models/hand_landmarker.task`,
-  `runningMode: 'VIDEO'`, `numHands: 2`, confidences from `TUNING.tracker`; GPU delegate, retry with
-  CPU on failure (show delegate in debug panel). Verify signatures against
-  `node_modules/@mediapipe/tasks-vision/vision.d.ts` (v1.0.1) before coding.
-- Call `detectForVideo(video, ts)` only when a **new video frame** exists, strictly increasing
-  timestamps, throttled to `TUNING.tracker.defaultInferenceHz` (30; setting 15/30/60). Render rate ≠
-  inference rate. Show "Loading hand tracker…" (`cameraStatus: 'loading'`) + load error with Retry.
-- `vision/landmarks.ts`: named indices `WRIST=0 … PINKY_TIP=20`, `HAND_CONNECTIONS`, hand metrics.
-- `vision/handPipeline.ts`: handedness correction (`HANDEDNESS_LABEL_SWAP`, **verify with user**:
-  raising physical right hand must show "Right"), mirrored view-normalized coords via
-  `ViewportMapper.trackerToViewX`, build `HandFrame`/`TrackedHand`.
-- `scene/overlay.ts`: 2D overlay canvas above WebGL (DPR-aware), skeleton drawn with
-  `ViewportMapper.viewToScreen` so it aligns with the video.
-- `ui/DebugPanel.tsx` v1: render FPS, inference FPS, avg inference ms, dropped frames, delegate,
-  per-hand side/score.
-- `core/input.ts`: `InputSource` interface, `LiveTrackerSource`, `FixturePlaybackSource`
-  (replays JSON), `FixtureRecorder` (dev-only, download JSON). Fixtures go in
-  `tests/fixtures/landmarks/`.
-- Increment `counters.trackersCreated`; tracker lives in the `Core` (bootstrap).
-- **Accept:** two hands tracked, skeletons aligned and labelled correctly; no duplicate tracker
-  under StrictMode.
+Built as planned — see §9 for what exists. Still pending: user's real-hand handedness check (D16).
 
 ### Phase 3 — Smoothing + gestures (M0: "My browser understands my hands locally")
 
@@ -333,7 +326,31 @@ blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'` �
   `createCoverUniforms`, `syncCoverUniforms`. Filter Lab/Portal lens shaders reuse these.
 - `src/scene/SceneManager.ts` — one WebGLRenderer (DPR capped at 2), PerspectiveCamera (fov 50,
   z=20), `drawingBuffer` size, `disposeObject3D()` helper.
-- `src/core/renderLoop.ts` — idempotent `RenderLoop` (dt clamped to 0.1 s), `FpsMeter`.
+- `src/core/renderLoop.ts` — idempotent `RenderLoop` (dt clamped to 0.1 s), `FpsMeter`,
+  `InferenceStats` (inference Hz, EMA ms, skipped camera frames).
+- `src/vision/HandTracker.ts` — the one `HandLandmarker`; `load()` idempotent (retry after error),
+  GPU then CPU, `detect(video, ts)`, status listeners. Core calls `load()` when the camera first runs.
+- `src/core/input.ts` — `RawDetection`/`RawHand` (serializable), `InputSource`,
+  `LiveTrackerSource` (rVFC new-frame detection, throttle with `throttleSlack`, strictly increasing
+  timestamps, reused buffers), `FixturePlaybackSource` (real-time, loops, jumps to newest),
+  `FixtureRecorder` (deep copy, relative ts), `parseFixture` (validates untrusted JSON),
+  `downloadFixture`.
+- `src/vision/landmarks.ts` — `WRIST … PINKY_TIP`, `FINGERTIPS`, `HAND_CONNECTIONS`, `palmScale`
+  (aspect-corrected), `boundsInto`, `makeLandmarkBuffer`.
+- `src/vision/handPipeline.ts` — `HandNormalizer.process(det, mirror, now)` → reused `HandFrame`;
+  `HandSlot` implements `TrackedHand` (preallocated arrays, `rawLabel` for debug); `labelToSide`.
+  **Phase 3 smoothing / confidence gate / grace period go here.**
+- `src/scene/overlay.ts` — `OverlayCanvas2D` (DPR-scaled, draw in CSS px) + `drawHandSkeleton`.
+- `Core` (bootstrap) per-frame order: `syncViewport` → `input.poll` → `recorder.record` (live only)
+  → `normalizer.process` → `renderFrame` (WebGL render, overlay clear + skeletons) → FPS →
+  `pushStatus` (≤10 Hz, only on change). Also `playFixture/stopPlayback`, `debugSnapshot()`,
+  `retryTracker()`. `core.hands` = latest `HandFrame`.
+- `src/ui/DebugPanel.tsx` polls `core.debugSnapshot()` every 250 ms while open; `TrackerNotice`
+  lives in `ui/PermissionScreen.tsx`.
+- In the browser pane you can drive the app from JS: find the app's module URL with
+  `performance.getEntriesByType('resource')` (it may carry `?t=` after HMR — importing the plain
+  URL creates a second module instance), then `getCore().playFixture(parseFixture(json))` with
+  `/tests/fixtures/landmarks/synthetic-two-hands.json` (Vite serves it in dev).
 - `src/state/appStore.ts` — zustand UI state only: activeMode, cameraStatus (`CameraState |
 'loading'`), cameraError, statusText, fps, panel toggles, canUndo/canRedo.
 - `src/config/keybindings.ts` — `resolveKeyAction()` maps every §21.7 shortcut; `App.tsx` handles
@@ -352,3 +369,9 @@ blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'` �
   `shreyas-gowda02`; fixed a 403 caused by the cached apphelix credential by pinning the username in
   the remote URL; all commits pushed. **Next:** user to confirm real-webcam Phase 1 check, then
   Phase 2.
+- **2026-09-23 — Session 1 (cont.).** CLAUDE.md turned into this full handoff doc (`6e88c4d`,
+  pushed). Phase 2 built: HandTracker, input sources + fixtures, HandNormalizer, skeleton overlay,
+  Debug panel, tracker notices. Verified in the browser pane: synthetic fixture plays with correct
+  sides/colours and status text; MediaPipe loads on GPU in ~0.8 s and runs inference on a fake
+  camera stream; `trackersCreated` = 1. Found/fixed an off-by-one in inference-rate stats.
+  **Next:** user's real-hand checks (Phase 1 + 2), then Phase 3.

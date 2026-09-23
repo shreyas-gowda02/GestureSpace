@@ -9,8 +9,9 @@ export const TUNING = {
   },
 
   tracker: {
-    modelAssetPath: '/models/hand_landmarker.task',
-    wasmBasePath: '/mediapipe/wasm',
+    /** Relative to Vite's BASE_URL so sub-path deployments keep working. */
+    modelAssetPath: 'models/hand_landmarker.task',
+    wasmBasePath: 'mediapipe/wasm',
     numHands: 2,
     minHandDetectionConfidence: 0.5,
     minHandPresenceConfidence: 0.5,
@@ -18,10 +19,31 @@ export const TUNING = {
     /** Default inference rate in Hz (setting: 15 / 30 / 60). */
     defaultInferenceHz: 30,
     /**
+     * Accept the next inference once this fraction of the interval has passed, so camera-frame
+     * jitter doesn't halve the effective rate (e.g. 30 Hz camera + 30 Hz target).
+     */
+    throttleSlack: 0.8,
+    /**
      * MediaPipe labels handedness assuming a mirrored (selfie) input; we feed the
-     * un-mirrored video, so labels may be swapped. Verified empirically in Phase 2.
+     * un-mirrored video, so labels are swapped. Per MediaPipe docs → true.
+     * Verify: raise your physical RIGHT hand — the overlay must say "Right".
      */
     HANDEDNESS_LABEL_SWAP: true,
+  },
+
+  overlay: {
+    showSkeleton: true,
+    lineWidth: 2.5,
+    jointRadius: 3,
+    tipRadius: 5,
+    colors: { right: '#21d4d8', left: '#ff3dcb' },
+  },
+
+  perf: {
+    /** EMA weight for average inference time. */
+    inferenceMsEma: 0.1,
+    inferenceFpsWindowMs: 1000,
+    debugPanelPollMs: 250,
   },
 
   smoothing: {

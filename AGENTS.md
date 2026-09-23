@@ -72,9 +72,12 @@ src/
   core/       types.ts (shared types + §7 frame contracts)
               camera.ts (P1: CameraManager + permission/capability checks)
               renderLoop.ts (P1: the one rAF loop + FpsMeter; perf stats extended in P2)
-              input.ts (P2: InputSource, LiveTrackerSource, FixturePlaybackSource, FixtureRecorder)
-  vision/     HandTracker.ts (P2) · landmarks.ts (P2: named indices, connections, hand metrics)
-              handPipeline.ts (P2/P3: normalizer, handedness, confidence gate, grace period)
+              input.ts (P2: RawDetection, InputSource, LiveTrackerSource, FixturePlaybackSource,
+              FixtureRecorder, parseFixture — fixtures store tracker-native RawDetections)
+  vision/     HandTracker.ts (P2: one HandLandmarker, GPU→CPU, dynamic import)
+              landmarks.ts (P2: named indices, HAND_CONNECTIONS, palmScale, bounds)
+              handPipeline.ts (P2: HandNormalizer — handedness swap, mirror, HandSlot reuse;
+              P3 adds smoothing, confidence gate, grace period)
               smoothing.ts (P3: OneEuroFilter + LandmarkSmoother)
   gestures/   GestureEngine.ts (P3: engine + precedence) · stateMachine.ts (P3)
               detectors.ts (P3: pinch, point, grab, openPalm, thumbPinky, swipe) · twoHand.ts (P3)

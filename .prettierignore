@@ -7,3 +7,4 @@ public/models
 package-lock.json
 *.docx
 GestureSpace_Build_Prompt.md
+tests/fixtures

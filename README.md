@@ -20,7 +20,7 @@
 ## Status
 
 🚧 Under construction — built phase by phase (see `GestureSpace_Build_Prompt.md` §26).
-Current: **Phase 1 — Camera** (permission flow, mirrored full-bleed camera rendered in Three.js).
+Current: **Phase 2 — Hand tracker** (MediaPipe two-hand tracking with a live skeleton overlay + debug panel).
 
 ## Quick start
 

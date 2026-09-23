@@ -5,13 +5,13 @@ import { useEffect, useRef } from 'react';
 import { acquireCore, releaseCore, reportCoreFailure, stopCamera } from '@/app/bootstrap';
 import { MODE_META } from '@/modes/registry';
 import { useAppStore, type CameraStatus } from '@/state/appStore';
+import { DebugPanel } from './DebugPanel';
 import { ModeDock } from './ModeDock';
-import { PermissionScreen } from './PermissionScreen';
+import { PermissionScreen, TrackerNotice } from './PermissionScreen';
 
 const CAMERA_LABEL: Record<CameraStatus, string> = {
   idle: 'Camera off',
   requesting: 'Requesting camera…',
-  loading: 'Loading hand tracker…',
   running: 'Camera on',
   stopped: 'Camera stopped',
   error: 'Camera error',
@@ -21,7 +21,9 @@ const CAMERA_LABEL: Record<CameraStatus, string> = {
 function TopBar() {
   const activeMode = useAppStore((s) => s.activeMode);
   const cameraStatus = useAppStore((s) => s.cameraStatus);
+  const trackerLoading = useAppStore((s) => s.trackerStatus === 'loading');
   const fps = useAppStore((s) => s.fps);
+  const indicator = cameraStatus === 'running' && trackerLoading ? 'loading' : cameraStatus;
   const helpOpen = useAppStore((s) => s.helpOpen);
   const debugOpen = useAppStore((s) => s.debugOpen);
   const settingsOpen = useAppStore((s) => s.settingsOpen);
@@ -37,9 +39,9 @@ function TopBar() {
       </div>
       <div className="gs-topbar__mode">{MODE_META[activeMode].name}</div>
       <div className="gs-topbar__spacer" />
-      <div className={`gs-camera-indicator is-${cameraStatus}`} role="status" aria-live="polite">
+      <div className={`gs-camera-indicator is-${indicator}`} role="status" aria-live="polite">
         <span className="gs-camera-indicator__dot" aria-hidden="true" />
-        {CAMERA_LABEL[cameraStatus]}
+        {indicator === 'loading' ? 'Camera on · loading tracker…' : CAMERA_LABEL[cameraStatus]}
       </div>
       <div className="gs-topbar__fps" aria-label="Frames per second">
         {fps >= 1 ? `${Math.round(fps)} FPS` : fps > 0 ? '<1 FPS' : '— FPS'}
@@ -122,7 +124,7 @@ function StatusBar() {
   const canUndo = useAppStore((s) => s.canUndo);
   const canRedo = useAppStore((s) => s.canRedo);
   const cameraStatus = useAppStore((s) => s.cameraStatus);
-  const cameraOn = cameraStatus === 'running' || cameraStatus === 'loading';
+  const cameraOn = cameraStatus === 'running' || cameraStatus === 'requesting';
 
   return (
     <footer className="gs-panel gs-statusbar">
@@ -186,6 +188,8 @@ export function AppShell() {
     <div className="gs-app">
       <Stage />
       <PermissionScreen />
+      <TrackerNotice />
+      <DebugPanel />
       <TopBar />
       <ModeDock />
       <ToolPanel />

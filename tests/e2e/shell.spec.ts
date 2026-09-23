@@ -34,4 +34,14 @@ test('camera: enable → running → stop → start, never duplicating streams o
   expect(counters?.renderersCreated).toBe(1);
   expect(counters?.cameraStreamsActive).toBe(1);
   expect(counters?.renderLoopsActive).toBe(1);
+  expect(counters?.trackersCreated ?? 0).toBeLessThanOrEqual(1);
+});
+
+test('hand tracker loads once and the debug panel reports it', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Enable camera' }).click();
+  await expect(page.getByText('Show your hand to the camera')).toBeVisible({ timeout: 30_000 });
+  await page.keyboard.press('`');
+  await expect(page.getByLabel('Debug panel')).toContainText(/ready · (GPU|CPU)/);
+  expect(await page.evaluate(() => window.__gs_debug?.trackersCreated)).toBe(1);
 });

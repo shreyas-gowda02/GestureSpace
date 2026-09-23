@@ -2,6 +2,8 @@
 // Browsers stop rAF in hidden tabs, so render (and later inference) pauses automatically on
 // `visibilitychange`; dt is clamped so resuming never produces a huge step.
 
+import { TUNING } from '@/config/tuning';
+
 const MAX_DT_S = 0.1;
 
 /** Frames-per-second over a rolling window. Allocation-free. */
@@ -76,4 +78,42 @@ export class RenderLoop {
     this.last = now;
     this.onFrame(now, dt);
   };
+}
+
+/** Hand-tracker timing for the debug panel. Allocation-free. */
+export class InferenceStats {
+  /** Inferences per second over a rolling window. */
+  fps = 0;
+  /** Exponential moving average of detectForVideo() wall time (ms). */
+  avgMs = 0;
+  lastMs = 0;
+  count = 0;
+  /** Camera frames that arrived but were never run through the tracker. */
+  skippedFrames = 0;
+  private windowStart = -1;
+  private windowCount = 0;
+
+  record(now: number, ms: number): void {
+    this.lastMs = ms;
+    const k = TUNING.perf.inferenceMsEma;
+    this.avgMs = this.count === 0 ? ms : this.avgMs * (1 - k) + ms * k;
+    this.count++;
+    if (this.windowStart < 0) {
+      this.windowStart = now; // the first sample opens the window; it isn't an interval
+      return;
+    }
+    this.windowCount++;
+    const elapsed = now - this.windowStart;
+    if (elapsed >= TUNING.perf.inferenceFpsWindowMs) {
+      this.fps = (this.windowCount * 1000) / elapsed;
+      this.windowCount = 0;
+      this.windowStart = now;
+    }
+  }
+
+  reset(): void {
+    this.fps = this.avgMs = this.lastMs = 0;
+    this.count = this.skippedFrames = this.windowCount = 0;
+    this.windowStart = -1;
+  }
 }

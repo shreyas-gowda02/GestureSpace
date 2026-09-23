@@ -1,7 +1,9 @@
-// Camera UI states (§21.3): pre-permission, requesting, denied/error (incl. no camera, camera in
-// use, insecure context, unsupported browser, disconnected) and stopped. Hidden while running.
+// Camera + tracker UI states (§21.3): pre-permission, requesting, denied/error (no camera, camera
+// in use, insecure context, unsupported browser, disconnected), stopped; then while running:
+// "Loading hand tracker…", tracker error with Retry, and "Show your hand to the camera".
 
-import { startCamera } from '@/app/bootstrap';
+import type { ReactNode } from 'react';
+import { retryTracker, startCamera } from '@/app/bootstrap';
 import type { CameraErrorKind } from '@/core/camera';
 import { useAppStore } from '@/state/appStore';
 
@@ -57,7 +59,7 @@ export function PermissionScreen() {
   const status = useAppStore((s) => s.cameraStatus);
   const error = useAppStore((s) => s.cameraError);
 
-  if (status === 'running' || status === 'loading') return null;
+  if (status === 'running') return null;
 
   let body;
   if (status === 'requesting') {
@@ -121,6 +123,64 @@ export function PermissionScreen() {
   return (
     <div className="gs-perm" role="dialog" aria-modal="false" aria-label="Camera">
       <div className="gs-panel gs-perm__card">{body}</div>
+    </div>
+  );
+}
+
+/** Small notices shown over the live camera while the hand tracker loads / waits for hands. */
+export function TrackerNotice() {
+  const camera = useAppStore((s) => s.cameraStatus);
+  const tracker = useAppStore((s) => s.trackerStatus);
+  const trackerError = useAppStore((s) => s.trackerError);
+  const handCount = useAppStore((s) => s.handCount);
+
+  if (camera !== 'running') return null;
+
+  if (tracker === 'error') {
+    return (
+      <div className="gs-perm" role="dialog" aria-modal="false" aria-label="Hand tracker">
+        <div className="gs-panel gs-perm__card">
+          <div className="gs-perm__icon is-error" aria-hidden="true">
+            !
+          </div>
+          <h1 className="gs-perm__title">Hand tracking couldn’t start</h1>
+          <p className="gs-perm__text">
+            The hand-tracking model failed to load. Check your connection to the dev server and
+            press Retry.
+          </p>
+          <button type="button" className="gs-btn gs-btn--primary" onClick={retryTracker}>
+            Retry
+          </button>
+          {trackerError && (
+            <details className="gs-perm__details">
+              <summary>Technical details</summary>
+              <code>{trackerError}</code>
+            </details>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  let content: ReactNode = null;
+  if (tracker === 'loading' || tracker === 'idle') {
+    content = (
+      <>
+        <span className="gs-spinner gs-spinner--sm" aria-hidden="true" />
+        Loading hand tracker…
+      </>
+    );
+  } else if (handCount === 0) {
+    content = (
+      <>
+        <span aria-hidden="true">✋</span> Show your hand to the camera
+      </>
+    );
+  }
+  if (!content) return null;
+  return (
+    <div className="gs-notice" role="status" aria-live="polite">
+      {content}
     </div>
   );
 }
