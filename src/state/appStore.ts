@@ -1,13 +1,16 @@
 // UI-only state (§2 rule 3). NEVER put landmarks, gesture frames or cursors here.
 
 import { create } from 'zustand';
+import type { CameraError, CameraState } from '@/core/camera';
 import type { ModeId } from '@/core/types';
 
-export type CameraStatus = 'idle' | 'requesting' | 'loading' | 'running' | 'stopped' | 'error';
+/** Camera lifecycle as the UI sees it ('loading' = hand tracker initialising, Phase 2). */
+export type CameraStatus = CameraState | 'loading';
 
 export interface AppState {
   activeMode: ModeId;
   cameraStatus: CameraStatus;
+  cameraError: CameraError | null;
   /** Throttled (≤10 Hz) status line, e.g. "Right: pinch · Left: —". */
   statusText: string;
   fps: number;
@@ -19,7 +22,7 @@ export interface AppState {
   canRedo: boolean;
 
   setActiveMode(mode: ModeId): void;
-  setCameraStatus(status: CameraStatus): void;
+  setCamera(status: CameraStatus, error: CameraError | null): void;
   setStatusText(text: string): void;
   setFps(fps: number): void;
   toggleToolPanel(): void;
@@ -32,6 +35,7 @@ export interface AppState {
 export const useAppStore = create<AppState>()((set) => ({
   activeMode: 'voxel',
   cameraStatus: 'idle',
+  cameraError: null,
   statusText: 'Right: — · Left: —',
   fps: 0,
   toolPanelOpen: true,
@@ -42,7 +46,7 @@ export const useAppStore = create<AppState>()((set) => ({
   canRedo: false,
 
   setActiveMode: (activeMode) => set({ activeMode }),
-  setCameraStatus: (cameraStatus) => set({ cameraStatus }),
+  setCamera: (cameraStatus, cameraError) => set({ cameraStatus, cameraError }),
   setStatusText: (statusText) => set({ statusText }),
   setFps: (fps) => set({ fps }),
   toggleToolPanel: () => set((s) => ({ toolPanelOpen: !s.toolPanelOpen })),

@@ -25,7 +25,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build && npm run preview',
+    // --mode test keeps window.__gs_debug counters (FEATURE_FLAGS.debugCounters) for leak checks.
+    command: 'npx vite build --mode test && npx vite preview',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

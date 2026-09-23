@@ -1,9 +1,12 @@
 // Base layout (§21.1): full-bleed stage behind translucent chrome —
 // top bar · mode dock · per-mode tool panel · status bar.
 
+import { useEffect, useRef } from 'react';
+import { acquireCore, releaseCore, reportCoreFailure, stopCamera } from '@/app/bootstrap';
 import { MODE_META } from '@/modes/registry';
 import { useAppStore, type CameraStatus } from '@/state/appStore';
 import { ModeDock } from './ModeDock';
+import { PermissionScreen } from './PermissionScreen';
 
 const CAMERA_LABEL: Record<CameraStatus, string> = {
   idle: 'Camera off',
@@ -39,7 +42,7 @@ function TopBar() {
         {CAMERA_LABEL[cameraStatus]}
       </div>
       <div className="gs-topbar__fps" aria-label="Frames per second">
-        {fps > 0 ? `${Math.round(fps)} FPS` : '— FPS'}
+        {fps >= 1 ? `${Math.round(fps)} FPS` : fps > 0 ? '<1 FPS' : '— FPS'}
       </div>
       <button
         type="button"
@@ -112,7 +115,7 @@ function ToolPanel() {
 
 /**
  * Bottom bar: gesture status + always-available recovery controls (§21.1, §21.10).
- * Actions are no-ops until their owning systems land (history: Phase 5, camera: Phase 1).
+ * Undo/Redo/Clear/Reset are wired when the systems they drive land (history: Phase 5).
  */
 function StatusBar() {
   const statusText = useAppStore((s) => s.statusText);
@@ -144,6 +147,7 @@ function StatusBar() {
           className="gs-btn gs-btn--danger"
           disabled={!cameraOn}
           aria-label="Stop camera"
+          onClick={stopCamera}
         >
           Stop cam
         </button>
@@ -152,24 +156,36 @@ function StatusBar() {
   );
 }
 
-export function AppShell() {
-  const activeMode = useAppStore((s) => s.activeMode);
-  const meta = MODE_META[activeMode];
+/**
+ * Full-bleed stage. The core (one renderer + hidden <video>) mounts its canvas here; React never
+ * renders into it. Layers bottom→top: WebGL canvas → 2D overlay (Phase 2) → React chrome.
+ */
+function Stage() {
+  const ref = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let mounted = false;
+    try {
+      acquireCore().mount(el);
+      mounted = true;
+    } catch (err) {
+      reportCoreFailure(err);
+    }
+    return () => {
+      if (mounted) releaseCore();
+    };
+  }, []);
+
+  return <div ref={ref} className="gs-stage" aria-hidden="true" />;
+}
+
+export function AppShell() {
   return (
     <div className="gs-app">
-      {/* Layer 1: WebGL canvas (camera background + 3D) — Phase 1 */}
-      {/* Layer 2: 2D overlay canvas — Phase 2 */}
-      <div className="gs-stage" aria-hidden="true">
-        <div className="gs-stage__placeholder">
-          <div className="gs-stage__orb" />
-          <p className="gs-stage__title">{meta.name}</p>
-          <p className="gs-stage__subtitle">{meta.tagline}</p>
-          <p className="gs-stage__note">Camera and hand tracking arrive in Phases 1–2.</p>
-        </div>
-      </div>
-
-      {/* Layer 3: React UI chrome */}
+      <Stage />
+      <PermissionScreen />
       <TopBar />
       <ModeDock />
       <ToolPanel />

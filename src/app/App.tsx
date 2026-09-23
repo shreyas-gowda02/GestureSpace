@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { resolveKeyAction } from '@/config/keybindings';
 import { useAppStore } from '@/state/appStore';
-import { acquireCore, releaseCore } from './bootstrap';
 import { AppShell } from '@/ui/AppShell';
 
 function isTypingTarget(t: EventTarget | null): boolean {
@@ -49,11 +48,6 @@ function useKeyboardShortcuts(): void {
 }
 
 export function App() {
-  useEffect(() => {
-    acquireCore();
-    return releaseCore;
-  }, []);
-
   useKeyboardShortcuts();
 
   return <AppShell />;

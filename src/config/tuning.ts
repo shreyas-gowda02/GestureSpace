@@ -86,6 +86,12 @@ export const TUNING = {
     fov: 50,
     near: 0.1,
     far: 1000,
+    cameraZ: 20,
+    /** Cap devicePixelRatio to keep fill-rate sane on 4K / HiDPI screens. */
+    maxPixelRatio: 2,
+    clearColor: 0x05070b,
+    /** Mirror (selfie) view by default; user-toggleable in Settings (Phase 12). */
+    mirror: true,
   },
 
   draw: {

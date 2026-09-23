@@ -10,7 +10,8 @@ export default defineConfig({
   },
   server: { port: 5173, strictPort: true },
   preview: { port: 4173, strictPort: true },
-  build: { target: 'es2022', sourcemap: true },
+  // three.js alone is ~600 kB minified; chunk splitting is revisited in Phase 13 (performance).
+  build: { target: 'es2022', sourcemap: true, chunkSizeWarningLimit: 1000 },
   test: {
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     environment: 'node',

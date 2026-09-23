@@ -20,7 +20,7 @@
 ## Status
 
 🚧 Under construction — built phase by phase (see `GestureSpace_Build_Prompt.md` §26).
-Current: **Phase 0 — Foundation** (app shell, tooling, architecture skeleton).
+Current: **Phase 1 — Camera** (permission flow, mirrored full-bleed camera rendered in Three.js).
 
 ## Quick start
 
