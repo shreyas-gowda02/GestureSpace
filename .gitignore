@@ -18,6 +18,9 @@ playwright/.cache/
 *.tsbuildinfo
 .vite/
 .eslintcache
+.cache/
+vite.config.*.timestamp-*
+*.tmp
 
 # env / secrets (V1 has none, but never commit them)
 .env
@@ -42,7 +45,14 @@ pnpm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+desktop.ini
 *.swp
+# Office lock files (e.g. while the project guide .docx is open in Word)
+~$*
+
+# Claude Code: keep shared launch config, ignore personal/local settings
+.claude/*
+!.claude/launch.json
 
 # dev-recorded landmark dumps (keep curated fixtures in tests/fixtures/)
 recordings/
