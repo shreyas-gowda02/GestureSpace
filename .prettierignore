@@ -1,0 +1,9 @@
+dist
+coverage
+playwright-report
+test-results
+public/mediapipe
+public/models
+package-lock.json
+*.docx
+GestureSpace_Build_Prompt.md
