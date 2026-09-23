@@ -69,7 +69,7 @@ export class HandNormalizer {
 
     const a = det.hands[0];
     const b = det.hands[1];
-    this.assignSides(a, b);
+    this.assignSides(a, b, mirror);
 
     const aspect = det.videoHeight > 0 ? det.videoWidth / det.videoHeight : 1;
     for (let i = 0; i < 2; i++) {
@@ -91,13 +91,15 @@ export class HandNormalizer {
     return this.frame;
   }
 
-  private assignSides(a: RawHand | undefined, b: RawHand | undefined): void {
+  private assignSides(a: RawHand | undefined, b: RawHand | undefined, mirror: boolean): void {
     let sa = a ? labelToSide(a.handedness, this.swap) : null;
     let sb = b ? labelToSide(b.handedness, this.swap) : null;
     if (a && b && (sa === sb || !sa || !sb)) {
-      // Ambiguous labels: decide by position. From the user's point of view their right hand is
-      // on the right, i.e. LOWER raw (un-mirrored) x. Independent of the display mirror setting.
-      const aIsRight = (a.landmarks[WRIST]?.x ?? 0) < (b.landmarks[WRIST]?.x ?? 0);
+      // Ambiguous labels: decide by where the hands appear ON SCREEN. The view is meant to look
+      // like a mirror, so the hand shown on the right is the user's right hand.
+      const ax = a.landmarks[WRIST]?.x ?? 0;
+      const bx = b.landmarks[WRIST]?.x ?? 0;
+      const aIsRight = mirror ? 1 - ax > 1 - bx : ax > bx;
       sa = aIsRight ? 'right' : 'left';
       sb = aIsRight ? 'left' : 'right';
     }

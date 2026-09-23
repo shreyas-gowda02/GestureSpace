@@ -91,11 +91,22 @@ describe('HandNormalizer', () => {
     expect(h?.bbox.max.y).toBeCloseTo(0.7);
   });
 
-  it('resolves duplicate labels by position (user-right hand = lower raw x)', () => {
-    const n = new HandNormalizer({ swapLabels: true });
+  it('resolves duplicate labels by on-screen position (hand shown on the right = right)', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    // Mirrored view: raw x 0.2 is displayed at 0.8 (right of screen).
     const f = n.process(det([rawHand('Left', 0.8), rawHand('Left', 0.2)]), true, 0);
-    expect(f.right?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.2);
-    expect(f.left?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.8);
+    expect(f.right?.landmarks[WRIST]?.x).toBeCloseTo(0.8);
+    expect(f.left?.landmarks[WRIST]?.x).toBeCloseTo(0.2);
+    // Un-mirrored view: raw x is the screen position.
+    const g = n.process(det([rawHand('Right', 0.8), rawHand('Right', 0.2)]), false, 1);
+    expect(g.right?.landmarks[WRIST]?.x).toBeCloseTo(0.8);
+    expect(g.left?.landmarks[WRIST]?.x).toBeCloseTo(0.2);
+  });
+
+  it('uses MediaPipe labels as-is by default (verified on a real webcam)', () => {
+    const f = new HandNormalizer().process(det([rawHand('Right', 0.3)]), true, 0);
+    expect(f.right).toBeDefined();
+    expect(f.left).toBeUndefined();
   });
 
   it('reuses the same objects every frame (no per-frame allocation)', () => {

@@ -17,7 +17,7 @@ const fixture = parseFixture(
 describe('synthetic two-hand fixture → HandFrame', () => {
   it('tracks both physical hands on the correct side of the mirrored view', () => {
     const src = new FixturePlaybackSource(fixture, 0, false);
-    const norm = new HandNormalizer({ swapLabels: true });
+    const norm = new HandNormalizer(); // uses the real TUNING handedness setting
     let frames = 0;
     let bothHands = 0;
     // Simulate a 60 Hz render loop over the whole clip.

@@ -71,15 +71,16 @@ for (let i = 0; i < FPS * SECONDS; i++) {
     videoWidth: VIDEO_W,
     videoHeight: VIDEO_H,
     hands: [
-      // Physical RIGHT hand: left side of the raw image; MediaPipe labels it "Left" (selfie assumption).
+      // Physical RIGHT hand: left side of the raw (un-mirrored) image. MediaPipe Tasks labels it
+      // "Right" on a real webcam (verified 2026-09-24; see TUNING.tracker.HANDEDNESS_LABEL_SWAP).
       {
-        handedness: 'Left',
+        handedness: 'Right',
         score: 0.97,
         landmarks: hand(RIGHT_TEMPLATE, 0.3 + 0.03 * wave, 0.72, 0.25 * wave, false),
       },
-      // Physical LEFT hand: right side of the raw image; labelled "Right".
+      // Physical LEFT hand: right side of the raw image; labelled "Left".
       {
-        handedness: 'Right',
+        handedness: 'Left',
         score: 0.95,
         landmarks: hand(RIGHT_TEMPLATE, 0.7 - 0.03 * wave, 0.72, -0.25 * wave, true),
       },

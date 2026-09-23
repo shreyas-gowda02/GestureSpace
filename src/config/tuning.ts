@@ -24,11 +24,13 @@ export const TUNING = {
      */
     throttleSlack: 0.8,
     /**
-     * MediaPipe labels handedness assuming a mirrored (selfie) input; we feed the
-     * un-mirrored video, so labels are swapped. Per MediaPipe docs → true.
+     * Whether to swap MediaPipe's "Left"/"Right" labels to get the user's PHYSICAL hand.
+     * MediaPipe's docs say labels assume a mirrored (selfie) input, which would imply `true` for
+     * our un-mirrored feed — but on a real webcam (2026-09-24, tasks-vision 1.0.1) the labels
+     * already match the physical hand, so this is `false`.
      * Verify: raise your physical RIGHT hand — the overlay must say "Right".
      */
-    HANDEDNESS_LABEL_SWAP: true,
+    HANDEDNESS_LABEL_SWAP: false,
   },
 
   overlay: {
