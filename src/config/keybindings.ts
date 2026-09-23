@@ -1,6 +1,6 @@
 // Keyboard shortcuts (§21.7). Every gesture-triggered critical action has a key equivalent.
 
-import { MODE_IDS, type ModeId } from '@/core/types/common';
+import { MODE_IDS, type ModeId } from '@/core/types';
 
 export type KeyAction =
   | { type: 'mode'; mode: ModeId }

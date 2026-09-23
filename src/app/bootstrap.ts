@@ -3,7 +3,7 @@
 // the camera stream, tracker, render loop or renderer. Ref-counted: the core is torn down
 // only when the last consumer releases it.
 
-import { FEATURE_FLAGS } from '@/config/featureFlags';
+import { FEATURE_FLAGS } from '@/config/tuning';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('bootstrap');

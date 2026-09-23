@@ -1,6 +1,6 @@
 // ModeId → metadata (name, icon, help). Factories are registered here in Phase 4.
 
-import { MODE_IDS, type ModeId } from '@/core/types/common';
+import { MODE_IDS, type ModeId } from '@/core/types';
 
 export interface ModeHelpItem {
   gesture: string;

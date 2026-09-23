@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveKeyAction, type KeyInput } from '@/config/keybindings';
 import { TUNING } from '@/config/tuning';
-import { MODE_IDS } from '@/core/types/common';
+import { MODE_IDS } from '@/core/types';
 import { MODE_LIST, MODE_META } from '@/modes/registry';
 
 const key = (k: string, mods: Partial<KeyInput> = {}): KeyInput => ({

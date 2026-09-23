@@ -1,7 +1,34 @@
-// Per-frame data contracts flowing through the pipeline (§7).
-// Modes consume InteractionFrame ONLY — never MediaPipe, the camera, or the render loop.
+// Shared types and per-frame data contracts (§7) used across every layer.
 
-import type { HandSide, ModeId, Vec2, Vec3 } from './common';
+export type Vec2 = { x: number; y: number };
+export type Vec3 = { x: number; y: number; z: number };
+
+/** The user's PHYSICAL hand (after handedness correction in HandNormalizer). */
+export type HandSide = 'left' | 'right';
+
+export const MODE_IDS = [
+  'voxel',
+  'panel',
+  'draw',
+  'strings',
+  'filter',
+  'portal',
+  'objectLab',
+] as const;
+export type ModeId = (typeof MODE_IDS)[number];
+
+export type QualityPreset = 'low' | 'medium' | 'high';
+export type InferenceRate = 15 | 30 | 60;
+
+/** Undoable edit. Every scene mutation in an editing mode goes through one. */
+export interface Command {
+  label: string;
+  do(): void;
+  undo(): void;
+}
+
+// ---------- Per-frame data contracts (§7) ----------
+// Modes consume InteractionFrame ONLY — never MediaPipe, the camera, or the render loop.
 
 export interface TrackedHand {
   side: HandSide;
@@ -100,4 +127,4 @@ export interface InteractionFrame {
 }
 
 // NOTE: ModeContext and SpatialMode (§7) reference Three.js and core classes that land in
-// Phases 1–4; they live in src/modes/shared/SpatialMode.ts and are added in Phase 4.
+// Phases 1–4; they are added in src/modes/types.ts in Phase 4.

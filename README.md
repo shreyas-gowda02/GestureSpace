@@ -64,10 +64,8 @@ self-hosted. A visible **● Camera on** indicator and a **Stop cam** button are
 
 ## Documentation
 
-- [AGENTS.md](AGENTS.md) — architecture rules for contributors and coding agents
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/GESTURES.md](docs/GESTURES.md) ·
-  [docs/MODES.md](docs/MODES.md) · [docs/PERFORMANCE.md](docs/PERFORMANCE.md) ·
-  [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+- [AGENTS.md](AGENTS.md) — architecture rules and folder map for contributors and coding agents
+- `docs/` (architecture, gestures, modes, performance, troubleshooting) — written as phases land
 
 ## Deploy
 

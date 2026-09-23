@@ -1,7 +1,7 @@
 // UI-only state (§2 rule 3). NEVER put landmarks, gesture frames or cursors here.
 
 import { create } from 'zustand';
-import type { ModeId } from '@/core/types/common';
+import type { ModeId } from '@/core/types';
 
 export type CameraStatus = 'idle' | 'requesting' | 'loading' | 'running' | 'stopped' | 'error';
 

@@ -13,5 +13,6 @@ Non-negotiable rules (condensed):
 - No per-frame allocation in hot paths; dispose all Three.js resources.
 - No new deps without justification; verify library APIs against installed types.
 - Unit tests for pure logic in the same change.
+- Lean files: no placeholders; group small cohesive modules (see AGENTS.md folder map).
 - Phase gate: `npm run lint && npm run typecheck && npm run test && npm run build` green →
   commit `phase-N: <summary>` → stop and report in the §3 format.

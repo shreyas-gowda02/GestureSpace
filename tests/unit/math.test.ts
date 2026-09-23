@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { clamp, invLerp, lerp, unwrapAngle, wrapAngle } from '@/utils/math';
-import { angle2, dist2, midpointInto, vec2 } from '@/utils/vectors';
+import {
+  angle2,
+  clamp,
+  dist2,
+  invLerp,
+  lerp,
+  midpointInto,
+  unwrapAngle,
+  vec2,
+  wrapAngle,
+} from '@/utils/math';
 
 describe('math', () => {
   it('clamps', () => {
