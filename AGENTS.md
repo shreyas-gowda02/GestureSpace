@@ -49,7 +49,7 @@ L5 EXPERIENCES    voxel | panel | draw | strings | filter | portal | objectLab
 L6 PRESENTATION   SceneManager (one renderer, camera-background quad) · OverlayCanvas2D · React UI
 ```
 
-One `requestAnimationFrame` (`src/core/timing/renderLoop.ts`): infer on new video frame (throttled,
+One `requestAnimationFrame` (`src/core/renderLoop.ts`): infer on new video frame (throttled,
 never queue stale frames) → normalize/smooth/gate → gestures + depth → cursors → `activeMode.update`
 → render (background → 3D → 2D overlay) → perf monitor + throttled status. Render rate ≠ inference rate.
 
@@ -71,7 +71,7 @@ src/
   config/     tuning.ts (ALL thresholds + feature flags) · keybindings.ts
   core/       types.ts (shared types + §7 frame contracts)
               camera.ts (P1: CameraManager + permission/capability checks)
-              renderLoop.ts (P1: the one rAF loop + FrameClock + PerformanceMonitor)
+              renderLoop.ts (P1: the one rAF loop + FpsMeter; perf stats extended in P2)
               input.ts (P2: InputSource, LiveTrackerSource, FixturePlaybackSource, FixtureRecorder)
   vision/     HandTracker.ts (P2) · landmarks.ts (P2: named indices, connections, hand metrics)
               handPipeline.ts (P2/P3: normalizer, handedness, confidence gate, grace period)

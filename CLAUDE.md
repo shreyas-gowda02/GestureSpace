@@ -1,18 +1,354 @@
-# CLAUDE.md
+# CLAUDE.md — GestureSpace session handoff
 
-See [AGENTS.md](AGENTS.md) for architecture, folder map and data contracts. The full spec is
-[GestureSpace_Build_Prompt.md](GestureSpace_Build_Prompt.md).
+> **Read this first in every new session.** It records what GestureSpace is, where the build
+> stands, every decision made so far, and exactly how to continue. The architecture, folder map and
+> data contracts are imported below from AGENTS.md. The full original spec is
+> [GestureSpace_Build_Prompt.md](GestureSpace_Build_Prompt.md) (section refs like "§13" point into it);
+> the product blueprint is `GestureSpace_One_Stop_Project_Guide_v2.docx` (background only — the
+> Build Prompt wins on any conflict, and **this file + AGENTS.md win over both** where they record
+> an agreed deviation).
+>
+> **Keep this file current:** at the end of every phase update §2 (status), §3 (next step),
+> §6 (decisions) and §10 (session log) before committing.
 
-Non-negotiable rules (condensed):
+@AGENTS.md
 
-- Modes consume `InteractionFrame` only — never MediaPipe, the camera, or the render loop.
-- One camera stream, one `HandLandmarker`, one render loop, one `WebGLRenderer` — created via
-  `src/app/bootstrap.ts`, StrictMode-safe, fully disposable.
-- No high-frequency data in React/zustand state; status text ≤10 Hz.
-- TS strict, no `any`; named landmark constants; all tunables in `src/config/tuning.ts`.
-- No per-frame allocation in hot paths; dispose all Three.js resources.
-- No new deps without justification; verify library APIs against installed types.
-- Unit tests for pure logic in the same change.
-- Lean files: no placeholders; group small cohesive modules (see AGENTS.md folder map).
-- Phase gate: `npm run lint && npm run typecheck && npm run test && npm run build` green →
-  commit `phase-N: <summary>` → stop and report in the §3 format.
+---
+
+## 1. What we are building (one paragraph)
+
+GestureSpace is a **browser-only webcam hand-tracking "spatial studio"**: one React + Three.js app
+where the user picks one of **seven experiences** and creates/manipulates things with their hands —
+(1) **Voxel Builder** (pinch to build turquoise blocks in 3D, depth layers, face extrusion),
+(2) **Spatial Panel** (hold/stretch/rotate an image between two hands), (3) **Air Draw** (glowing
+strokes with the index finger), (4) **Hand Strings** (glowing particles + elastic threads on hand
+joints), (5) **Filter Lab** (a "magic lens" strip that shows the camera filtered — thermal, sketch,
+glitch…), (6) **Portal / Dimensions** (a window into another world), (7) **3D Object Lab**
+(spawn/select/move/rotate/scale primitives). All seven share ONE camera, ONE MediaPipe tracker, ONE
+gesture engine and ONE renderer. Everything runs locally; no backend, no uploads, free to host.
+
+---
+
+## 2. Current status
+
+| Phase | Name                                                                 | Status                                                 | Commit               |
+| ----- | -------------------------------------------------------------------- | ------------------------------------------------------ | -------------------- |
+| 0     | Foundation (tooling, shell, lean structure)                          | ✅ done                                                | `18c7bbb`, `f4d6d00` |
+| 1     | Camera (permission flow, mirrored cover-crop background)             | ✅ done — **awaiting user's real-webcam confirmation** | `80f5c7f`            |
+| 2     | Hand tracker                                                         | ⏭ **next**                                             | —                    |
+| 3     | Smoothing + gestures (**M0** demo)                                   | ⬜                                                     | —                    |
+| 4     | Spatial cursor + ModeController                                      | ⬜                                                     | —                    |
+| 5     | Voxel Builder (**M1** demo)                                          | ⬜                                                     | —                    |
+| 6     | Two-hand transform core                                              | ⬜                                                     | —                    |
+| 7     | Spatial Panel + Texture Surface                                      | ⬜                                                     | —                    |
+| 8     | Air Draw                                                             | ⬜                                                     | —                    |
+| 9     | Hand Strings                                                         | ⬜                                                     | —                    |
+| 10    | Filter Lab + Portal (**M3** demo)                                    | ⬜                                                     | —                    |
+| 11    | 3D Object Lab (completes **M2**)                                     | ⬜                                                     | —                    |
+| 12    | Product polish (onboarding, settings, persistence…)                  | ⬜                                                     | —                    |
+| 13    | Performance + QA + docs + deploy (**M4**)                            | ⬜                                                     | —                    |
+| 14    | Optional AI layer — **do NOT start unless the user explicitly asks** | ⛔                                                     | —                    |
+
+**What works today:** app shell (top bar, 7-mode dock with keys 1–7, collapsible tool panel with
+per-mode gesture help, status bar), camera permission/error/stopped screens, live mirrored
+full-bleed camera rendered inside Three.js with object-fit-cover cropping, Stop/Start camera, FPS
+counter, dev debug counters (`window.__gs_debug`). 46 unit tests passing.
+
+**What does not work yet:** no hand tracking, no gestures, no experiences (dock only switches the
+label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings buttons only toggle state
+(panels not built).
+
+**Pushed to GitHub:** yes, `main` is in sync with `origin/main` as of commit `80f5c7f`.
+
+---
+
+## 3. How to resume (next steps)
+
+1. `git status` / `git log --oneline -5` — confirm the tree is clean and matches §2.
+2. `npm install` if `node_modules/` is missing (postinstall copies MediaPipe WASM into
+   `public/mediapipe/wasm/`).
+3. Run the phase gate once to confirm a green baseline (see §5).
+4. Ask the user whether the Phase 1 real-webcam check passed (mirrored, full-screen, no stretching).
+5. Start **Phase 2 — Hand tracker** (§7 below). Stop after it and report in the §5 format.
+
+The user replies **"continue"** to approve moving to the next phase. Never start the next phase
+without that.
+
+---
+
+## 4. Working agreements with the user (important)
+
+- **Phase-gated:** build one phase, run all checks, commit, then **STOP** and report (format in §5).
+  Wait for "continue".
+- **Lean file structure** (user explicitly asked): no placeholder/empty files; group small cohesive
+  modules; follow the folder map in AGENTS.md (it supersedes spec §6). Before creating a file, check
+  whether the code belongs in an existing one.
+- **Explain for testing:** each phase report must include plain-language "how to try it" steps the
+  user can follow in their own browser.
+- **Commit** at the end of each phase (`phase-N: <summary>`). **Do not push** unless the user asks;
+  they push themselves with `git push`.
+- **GitHub account = `shreyas-gowda02`** (repo `github.com/shreyas-gowda02/GestureSpace`). The local
+  `gh` CLI is logged into a _different_ work account (`shreyas-apphelix`) — never use `gh` for this
+  project unless `gh auth status` shows `shreyas-gowda02`. The remote URL is pinned to
+  `https://shreyas-gowda02@github.com/shreyas-gowda02/GestureSpace.git` so Git Credential Manager
+  uses the right login; do not change it or delete the apphelix credential.
+- Commit author is `Shreyas Gowda <shreyasg778@gmail.com>` (repo-local git config).
+- Never modify the two spec documents; `GestureSpace_Build_Prompt.md` is excluded from Prettier.
+- Ask the user (in the phase report) when a wrong guess would be expensive.
+
+---
+
+## 5. Phase gate + report format
+
+Run, all must pass:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npx prettier --check .
+```
+
+Then commit and report **exactly** like this:
+
+```
+## Phase N report — <name>
+**Built:** <bullets>
+**Files added/changed:** <list>
+**How to try it (manual steps):** <numbered steps, what the user should see>
+**Checks:** lint ✅ typecheck ✅ tests ✅ (N passing) build ✅
+**Deviations from spec:** <none | list with reason>
+**Known issues / risks:** <list>
+**Questions for you:** <none | list>
+**Next phase:** <name + one-line plan>
+```
+
+Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M3** after 10 · **M4** after 13.
+
+---
+
+## 6. Decisions & deviations log (agreed — do not re-litigate)
+
+| #   | Decision                                                                                                                                       | Why                                                                                                           |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| D1  | Project lives at repo root, not in a `gesturespace/` subfolder                                                                                 | Repo already existed                                                                                          |
+| D2  | Current stable deps: React 19, TS 6.0, Vite 8, Vitest 5, ESLint 10 (flat), three 0.186, @mediapipe/tasks-vision 1.0.1, zustand 5, idb-keyval 6 | Spec says use current stable. typescript-eslint supports TS < 6.1 — don't bump TS past 6.0.x without checking |
+| D3  | **Lean folder map** (AGENTS.md) replaces spec §6; ~100 placeholder files deleted                                                               | User request: fewer files                                                                                     |
+| D4  | Single `tsconfig.json` (no app/node split); Prettier config lives in `package.json`; `typecheck` = `tsc --noEmit`                              | Fewer files                                                                                                   |
+| D5  | Feature flags live in `config/tuning.ts` (`FEATURE_FLAGS`), not a separate file                                                                | Fewer files                                                                                                   |
+| D6  | `ModeContext`/`SpatialMode` types go in `src/modes/types.ts` (Phase 4), not `core/types.ts`                                                    | They depend on Three.js + Phase 1–4 classes                                                                   |
+| D7  | Mode registry (`modes/registry.ts`) already holds metadata (name, hotkey, tagline, help); factories added in Phase 4                           | Dock/help needed it in Phase 0                                                                                |
+| D8  | No Google Fonts — system font stack (Inter if installed)                                                                                       | CSP `default-src 'self'`                                                                                      |
+| D9  | Camera colours pass through unconverted (no colorspace chunk in background shader)                                                             | Feed looks identical to the raw camera                                                                        |
+| D10 | Camera auto-retries without resolution constraints if 1280×720 is rejected                                                                     | Better than failing on odd webcams                                                                            |
+| D11 | `chunkSizeWarningLimit: 1000` in Vite; three.js makes the bundle ~770 kB                                                                       | Code-splitting deferred to Phase 13                                                                           |
+| D12 | Render loop runs **only while the camera is streaming**; canvas is `visibility:hidden` otherwise                                               | Spec §21.3 "camera stopped: everything paused"                                                                |
+| D13 | Playwright builds with `vite build --mode test` so `window.__gs_debug` exists in E2E                                                           | Leak/duplication assertions                                                                                   |
+| D14 | Debug counters: `coreCreated/Disposed`, `renderersCreated`, `renderLoopsStarted/Active`, `cameraStreamsStarted/Active`, `trackersCreated`      | E2E proves nothing is duplicated                                                                              |
+| D15 | `.claude/launch.json` is committed (dev-server preview config); other `.claude/*` ignored                                                      | Shared tooling config                                                                                         |
+| D16 | `HANDEDNESS_LABEL_SWAP = true` is a **provisional default** — must be verified with a real hand in Phase 2                                     | Spec §8                                                                                                       |
+
+---
+
+## 7. Remaining phases — scope & acceptance (condensed from spec §26 + mode sections)
+
+Files listed are the planned **lean** files (see AGENTS.md folder map). Pure logic gets Vitest tests
+in the same phase.
+
+### Phase 2 — Hand tracker
+
+- `vision/HandTracker.ts`: load `HandLandmarker` **once** via
+  `FilesetResolver.forVisionTasks('/mediapipe/wasm')`, model `/models/hand_landmarker.task`,
+  `runningMode: 'VIDEO'`, `numHands: 2`, confidences from `TUNING.tracker`; GPU delegate, retry with
+  CPU on failure (show delegate in debug panel). Verify signatures against
+  `node_modules/@mediapipe/tasks-vision/vision.d.ts` (v1.0.1) before coding.
+- Call `detectForVideo(video, ts)` only when a **new video frame** exists, strictly increasing
+  timestamps, throttled to `TUNING.tracker.defaultInferenceHz` (30; setting 15/30/60). Render rate ≠
+  inference rate. Show "Loading hand tracker…" (`cameraStatus: 'loading'`) + load error with Retry.
+- `vision/landmarks.ts`: named indices `WRIST=0 … PINKY_TIP=20`, `HAND_CONNECTIONS`, hand metrics.
+- `vision/handPipeline.ts`: handedness correction (`HANDEDNESS_LABEL_SWAP`, **verify with user**:
+  raising physical right hand must show "Right"), mirrored view-normalized coords via
+  `ViewportMapper.trackerToViewX`, build `HandFrame`/`TrackedHand`.
+- `scene/overlay.ts`: 2D overlay canvas above WebGL (DPR-aware), skeleton drawn with
+  `ViewportMapper.viewToScreen` so it aligns with the video.
+- `ui/DebugPanel.tsx` v1: render FPS, inference FPS, avg inference ms, dropped frames, delegate,
+  per-hand side/score.
+- `core/input.ts`: `InputSource` interface, `LiveTrackerSource`, `FixturePlaybackSource`
+  (replays JSON), `FixtureRecorder` (dev-only, download JSON). Fixtures go in
+  `tests/fixtures/landmarks/`.
+- Increment `counters.trackersCreated`; tracker lives in the `Core` (bootstrap).
+- **Accept:** two hands tracked, skeletons aligned and labelled correctly; no duplicate tracker
+  under StrictMode.
+
+### Phase 3 — Smoothing + gestures (M0: "My browser understands my hands locally")
+
+- `vision/smoothing.ts`: One Euro filter per landmark coord; two profiles (visual stronger, trigger
+  lighter — gesture metrics use trigger). Settings slider maps to `minCutoff`.
+- Confidence gate (`MIN_HAND_SCORE`), jump rejection (`MAX_JUMP`), grace period
+  (`HAND_LOSS_GRACE_MS` ≈150 ms, `lostForMs`), force-release captures after grace.
+- `gestures/stateMachine.ts`: idle→candidate→active→released, hysteresis start/end thresholds,
+  `CANDIDATE_MS`, release debounce, `justStarted`/`justEnded` true for exactly one frame.
+- `gestures/detectors.ts`: pinch (`dist(THUMB_TIP,INDEX_TIP)/palmScale`, start 0.35 / end 0.5),
+  point, grab, openPalm, thumbPinky (400 ms cooldown), swipe (off by default). All normalised by
+  aspect-corrected `palmScale = dist(WRIST, MIDDLE_MCP)`.
+- `gestures/twoHand.ts`: center/distance/angle + scale/rotation/translation vs baseline, angle unwrap.
+- `gestures/GestureEngine.ts` + precedence (UI > two-hand > single-hand; cancel first hand's action
+  if second joins within `TWO_HAND_JOIN_MS`; releases go to the capturer; no capture survives a mode
+  switch). Hand identity locked by wrist proximity during captures.
+- `GestureStatus` line in the status bar ("Right: pinch · Left: open"), ≤10 Hz.
+- First recorded fixtures + integration tests replaying them.
+- **Accept:** stationary hand overlay visibly stable; pinch never flickers; status accurate.
+
+### Phase 4 — Spatial cursor
+
+- `spatial/CoordinateMapper.ts` (view↔screen↔NDC↔scene + raycast cursor + interaction plane),
+  `spatial/DepthEstimator.ts` (§13.4: `W_PALM·(palmScale/baseline−1) + W_MPZ·normalizedMpZ`, One
+  Euro, quantise with hysteresis + dwell), `spatial/CaptureManager.ts`, `scene/materials.ts` +
+  lighting, 3D cursor per hand.
+- `modes/types.ts` (`SpatialMode`, `ModeContext`), `modes/ModeController.ts` (exit() releases all
+  captures before next enter(); per-mode state preserved), registry factories, placeholder modes.
+- **Accept:** 3D cursor tracks fingertip stably; switching modes leaks nothing
+  (`renderer.info.memory` back to baseline).
+
+### Phase 5 — Voxel Builder (M1: "I can build 3D structures in the air") — spec §13
+
+- `modes/voxel/`: `VoxelMode.ts`, `VoxelGrid.ts` (Map occupancy + commands), `VoxelRenderer.ts`
+  (InstancedMesh per material, growable capacity, ghost voxel, build-plane grid), `voxelMath.ts`
+  (3D DDA gap fill, face-normal extrusion, layer stepping); `modes/shared/history.ts`
+  (CommandHistory cap 200).
+- Depth system: active Z layer + faint grid + `Depth: -3 … +3` indicator; face extrusion
+  (hit voxel + face normal); push/pull extrusion (relative depth, one undo step); explicit layer
+  control (+Z/−Z buttons, E/Q keys, non-dominant pinch + vertical travel per `LAYER_STEP_DISTANCE`);
+  **Depth Lock ON by default** (L toggles).
+- Tools Build/Erase/Paint (X), 8-colour palette (default `#21d4d8`), solid/glass/emissive,
+  continuous paint with DDA, axis lock on face strokes, Clear, Undo/Redo (Ctrl+Z / Ctrl+Shift+Z),
+  two-hand pinch transforms `voxelRoot`, Reset view.
+- **Accept (§13.9):** stationary pinch = exactly one voxel; no gaps at normal speed; grid exact
+  after 1000+ placements; Depth Lock prevents Z drift; all 6 face normals unit-tested; push/pull =
+  one undo; 5,000 voxels ≥ 45 FPS.
+
+### Phase 6 — Two-hand transform core — spec §12
+
+- `modes/shared/TwoHandTransform.ts`: baseline snapshot on `twoHand.justStarted` (no jump on
+  engage), position/scale/rotationZ relative to baseline, clamp per-frame deltas, freeze then release
+  on hand loss, optional non-uniform width, emits one TransformObjectCommand on release. Apply to
+  voxelRoot. **Accept:** no jump, safe release, crossing hands OK.
+
+### Phase 7 — Spatial Panel + Texture Surface — spec §14, §17
+
+- `modes/shared/TextureSurface.ts` (subdivided plane + pluggable ShaderMaterial + TextureSources:
+  image, snapshot, liveCameraFull, procedural; later liveCameraLens, renderTarget; rounded alpha
+  mask, glowing handles), `modes/panel/PanelMode.ts`, content switcher, Reset. Sample images in
+  `public/textures/`.
+
+### Phase 8 — Air Draw — spec §15
+
+- `modes/draw/DrawMode.ts` + `strokes.ts` (strokes stored view-normalised, `MIN_STROKE_STEP`,
+  One Euro, Catmull-Rom render on the 2D overlay, 8 neon colours, 3 widths, glow toggle,
+  stroke-level eraser, undo/redo, clear). **Accept:** smooth strokes, stay aligned on resize.
+
+### Phase 9 — Hand Strings — spec §16
+
+- `modes/strings/StringsMode.ts` + `springs.ts` (THREE.Points glow sprites on 21 landmarks/hand,
+  LineSegments anatomical + fingertip web + left↔right links, spring-damper midpoints, trails ring
+  buffer, velocity-driven brightness, hue drift; styles skeleton/web/full mesh). Typed arrays
+  updated in place. **Accept:** ≥55 FPS, zero per-frame allocations.
+
+### Phase 10 — Filter Lab + Portal (M3) — spec §18, §19
+
+- `modes/filter/FilterLabMode.ts` + `filters.ts`: lens shader samples the camera **behind** the
+  strip via `coverUv(screenUv())` from `modes/shared/glsl.ts` (already written in Phase 1). 13
+  presets: none, thermal, sketch, pixelate, glitch, redChannel, edge, blur, cartoon, rainbow +
+  invert, rgbSplit, popArt. Switch via thumb-pinky (dominant = next, other = prev), ←/→ and [/],
+  UI buttons; toast with preset name; sources live lens / snapshot / image.
+- `modes/portal/PortalMode.ts` + `portalContent.ts`: ≥3 presets (Nebula fbm shader, Other World
+  render-target scene with parallax, Inverted Reality lens, bundled image), animated rim, alpha
+  mask, opening animation, Reset. **Accept:** lens perfectly aligned with background while moving.
+
+### Phase 11 — 3D Object Lab (completes M2) — spec §20
+
+- `modes/objectLab/ObjectLabMode.ts` + `objects.ts`: cube/sphere/cylinder/plane/torus,
+  solid/emissive/transparent, spawn (toolbar or open-palm hold radial menu), point+pinch select,
+  multi-select, one-hand move on camera-facing plane, depth via push/pull or Q/E, two-hand
+  rotate/scale, duplicate (D), delete (Delete), group/ungroup, all undoable.
+
+### Phase 12 — Product polish — spec §21, §22
+
+- `ui/overlays.tsx` (Onboarding 5 steps, HelpOverlay per mode, SettingsPanel: dominant hand,
+  mirror, smoothing, pinch sensitivity, rotation/scale sensitivity, inference rate, quality preset,
+  camera resolution/device, skeleton, Depth Lock default, reset), full DebugPanel,
+  `ui/toolPanels.tsx`, `state/persistence.ts` (versioned settings in localStorage; scenes in
+  IndexedDB with 1 s debounced autosave + Save/Load/Export/Import JSON), full keyboard map
+  (`config/keybindings.ts` already resolves every key), accessibility pass.
+
+### Phase 13 — Performance + QA (M4) — spec §23, §25, §27, §28
+
+- Profiling, leak check (switch all modes 10× → `renderer.info.memory` baseline), 5k-voxel test,
+  E2E suite complete, manual matrix in `docs/PERFORMANCE.md`, write all docs (`docs/ARCHITECTURE.md`,
+  `GESTURES.md`, `MODES.md`, `PERFORMANCE.md`, `TROUBLESHOOTING.md`), code-splitting, Vercel deploy +
+  CI deploy step, release tags `v0.1-m0` … `v1.0-m4`.
+
+---
+
+## 8. Environment & tooling notes
+
+- **OS:** Windows 11; shells: PowerShell + Git Bash. Node 24 (`.nvmrc`), npm 11.
+- **Scripts:** `dev` (Vite, port 5173) · `build` (`tsc --noEmit && vite build`) · `preview` (4173) ·
+  `lint` · `format` · `typecheck` · `test` · `test:watch` · `e2e` · `fetch-model`.
+- **Assets:** `public/models/hand_landmarker.task` (7.8 MB float16) is **committed**;
+  `npm run fetch-model` refreshes it. `public/mediapipe/wasm/` is generated at postinstall and
+  git-ignored.
+- **E2E:** Playwright needs `npx playwright install chromium` first (not yet installed — ask the
+  user before downloading). Uses fake camera flags.
+- **Claude desktop browser pane blocks real webcams.** To exercise the video pipeline there,
+  override `navigator.mediaDevices.getUserMedia` in the page with a `canvas.captureStream()` test
+  pattern, and **reload the tab afterwards** (the user once saw the red/blue test pattern and was
+  confused). Real-camera checks must be done by the user in their own Chrome/Edge at
+  `http://localhost:5173`. The pane also throttles rAF (~1.5 fps) when not focused — low FPS there
+  is not an app bug.
+- `.claude/launch.json` defines the `dev` preview server.
+- CSP (vercel.json): `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'
+blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'` — no external
+  fonts/CDNs.
+- `.gitignore` excludes node_modules, dist, public/mediapipe/wasm, test output, .env, editor/OS
+  junk, Office `~$*` lock files, `.claude/*` except `launch.json`.
+
+---
+
+## 9. Key implementation facts (things already built — reuse, don't rewrite)
+
+- `src/app/bootstrap.ts` — `Core` class = composition root (CameraManager, ViewportMapper,
+  SceneManager, shared `THREE.VideoTexture`, CameraBackground, RenderLoop, FpsMeter).
+  `createRefCounted()` holder makes it StrictMode-safe (dispose deferred one microtask).
+  `acquireCore/releaseCore/getCore`, UI actions `startCamera/stopCamera/reportCoreFailure`. The
+  `Stage` component in `ui/AppShell.tsx` acquires the core and calls `core.mount(el)`. New core
+  systems (tracker, gesture engine, mode controller) get added to `Core` and ticked in `Core.frame`.
+- `src/core/camera.ts` — `CameraManager` (state machine idle/requesting/running/stopped/error,
+  `classifyCameraError`, `checkCameraSupport`, superseded-request guard, track `ended` handling).
+- `src/spatial/ViewportMapper.ts` — cover-crop + mirror. `viewToScreen`, `screenToView`,
+  `trackerToViewX`, `videoAspect`, `coverScale/coverOffset` uniforms, `version` bumps on change.
+  **All overlays and lens shaders must use it.**
+- `src/modes/shared/glsl.ts` — `COVER_UV_GLSL` (`screenUv()`, `coverUv()`), `FULLSCREEN_VERT`,
+  `createCoverUniforms`, `syncCoverUniforms`. Filter Lab/Portal lens shaders reuse these.
+- `src/scene/SceneManager.ts` — one WebGLRenderer (DPR capped at 2), PerspectiveCamera (fov 50,
+  z=20), `drawingBuffer` size, `disposeObject3D()` helper.
+- `src/core/renderLoop.ts` — idempotent `RenderLoop` (dt clamped to 0.1 s), `FpsMeter`.
+- `src/state/appStore.ts` — zustand UI state only: activeMode, cameraStatus (`CameraState |
+'loading'`), cameraError, statusText, fps, panel toggles, canUndo/canRedo.
+- `src/config/keybindings.ts` — `resolveKeyAction()` maps every §21.7 shortcut; `App.tsx` handles
+  mode/help/debug/escape so far — later phases handle the rest.
+- `src/config/tuning.ts` — every threshold/timing already has a starting value for all phases.
+
+---
+
+## 10. Session log
+
+- **2026-09-23 — Session 1.** Read both spec files. Phase 0 built (tooling, shell, types, tuning,
+  keybindings, registry, bootstrap). User asked for fewer files → deleted ~100 placeholders,
+  consolidated modules, adopted lean folder map (D3–D5). Extended `.gitignore`. Phase 1 built and
+  verified in the browser pane with a synthetic camera (mirror, cover-crop landscape + portrait,
+  DPR, stop/start with no duplicate streams/loops, denied path). Repo created on GitHub under
+  `shreyas-gowda02`; fixed a 403 caused by the cached apphelix credential by pinning the username in
+  the remote URL; all commits pushed. **Next:** user to confirm real-webcam Phase 1 check, then
+  Phase 2.
