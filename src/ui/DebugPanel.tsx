@@ -11,6 +11,14 @@ import { useAppStore } from '@/state/appStore';
 const f1 = (n: number): string => n.toFixed(1);
 const f2 = (n: number): string => n.toFixed(2);
 
+const GESTURE_LABEL: Record<string, string> = {
+  pinch: 'pinch',
+  grab: 'grab',
+  point: 'point',
+  openPalm: 'open',
+  thumbPinky: 'thumb-pinky',
+};
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="gs-debug__row">
@@ -123,6 +131,11 @@ export function DebugPanel() {
             <Row label="Viewport">
               {snap.viewport.width}×{snap.viewport.height} @{snap.viewport.dpr}x
             </Row>
+            <Row label="Hands seen">
+              {snap.userLock.detected} detected · {snap.userLock.used} used (main user)
+              {snap.userLock.identityLocked && ' · 🔒'}
+            </Row>
+            <Row label="Smoothing">{f2(snap.smoothingHz)} Hz min cutoff</Row>
             <Row label="Input">
               {snap.playback
                 ? `fixture “${snap.playback.name}” ${Math.round(snap.playback.progress * 100)}%`
@@ -137,9 +150,27 @@ export function DebugPanel() {
               <div key={h.side} className={`gs-debug__hand is-${h.side}`}>
                 <strong>{h.side === 'right' ? 'Right' : 'Left'}</strong> ·{' '}
                 {Math.round(h.score * 100)}% · palm {f2(h.palmScale)} · wrist ({f2(h.wrist.x)},{' '}
-                {f2(h.wrist.y)})<span className="gs-muted"> · MediaPipe label “{h.rawLabel}”</span>
+                {f2(h.wrist.y)}){h.lostForMs > 0 && ` · lost ${Math.round(h.lostForMs)} ms`}
+                <span className="gs-muted"> · MediaPipe “{h.rawLabel}”</span>
+                <div className="gs-debug__gestures">
+                  {h.gestures.map((g) => (
+                    <span key={g.name} className={`gs-debug__gesture is-${g.phase}`}>
+                      {GESTURE_LABEL[g.name] ?? g.name} {f2(g.value)}
+                    </span>
+                  ))}
+                </div>
               </div>
             ))}
+          </div>
+
+          <div className="gs-debug__section">
+            <h3 className="gs-debug__heading">Two hands</h3>
+            <Row label="Two-hand pinch">
+              {snap.twoHand.active
+                ? `active · ×${f2(snap.twoHand.scale)} · ${Math.round(snap.twoHand.rotationDeg)}°`
+                : 'idle'}
+            </Row>
+            <Row label="Hand distance">{f2(snap.twoHand.distance)}</Row>
           </div>
 
           {FEATURE_FLAGS.fixtureRecorder && <FixtureControls snap={snap} />}

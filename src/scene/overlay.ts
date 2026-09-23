@@ -3,7 +3,8 @@
 // with the cover-cropped, mirrored camera background.
 
 import { TUNING } from '@/config/tuning';
-import type { HandSide, TrackedHand, Vec2 } from '@/core/types';
+import type { GestureFrame, HandFrame, HandSide, TrackedHand, Vec2 } from '@/core/types';
+import { pinchPointInto } from '@/gestures/twoHand';
 import type { ViewportMapper } from '@/spatial/ViewportMapper';
 import { FINGERTIPS, HAND_CONNECTIONS, LANDMARK_COUNT, WRIST } from '@/vision/landmarks';
 
@@ -77,11 +78,13 @@ export function drawHandSkeleton(
     if (lm && p) viewport.viewToScreen(lm, p);
   }
 
+  // A hand in its loss grace period is drawn faded ("frozen").
+  const alpha = hand.lostForMs > 0 ? 0.35 : 1;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.strokeStyle = color;
   ctx.lineWidth = o.lineWidth;
-  ctx.globalAlpha = 0.9;
+  ctx.globalAlpha = 0.9 * alpha;
   ctx.beginPath();
   for (const [a, b] of HAND_CONNECTIONS) {
     const pa = pts[a];
@@ -92,7 +95,7 @@ export function drawHandSkeleton(
   }
   ctx.stroke();
 
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha;
   for (let i = 0; i < LANDMARK_COUNT; i++) {
     const p = pts[i];
     if (!p) continue;
@@ -118,4 +121,94 @@ export function drawHandSkeleton(
   ctx.fillStyle = color;
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + 8, y + 11);
+  ctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gesture feedback (§21.5): pinch rings + the two-hand line / centre / scale·angle readout.
+// ---------------------------------------------------------------------------------------------
+
+const pinchView: Record<HandSide, Vec2> = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
+const pinchScreen: Record<HandSide, Vec2> = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
+const centerScreen: Vec2 = { x: 0, y: 0 };
+const twoHandLabel = { scale: -1, deg: -9999, text: '' };
+
+function twoHandText(scale: number, rotation: number): string {
+  const s = Math.round(scale * 100);
+  const d = Math.round((rotation * 180) / Math.PI);
+  if (s !== twoHandLabel.scale || d !== twoHandLabel.deg) {
+    twoHandLabel.scale = s;
+    twoHandLabel.deg = d;
+    twoHandLabel.text = `×${(s / 100).toFixed(2)}  ${d > 0 ? '+' : ''}${d}°`;
+  }
+  return twoHandLabel.text;
+}
+
+export function drawGestureIndicators(
+  ctx: CanvasRenderingContext2D,
+  hands: HandFrame,
+  gestures: GestureFrame,
+  bothVisible: boolean,
+  viewport: ViewportMapper,
+): void {
+  const colors = TUNING.overlay.colors;
+  for (const side of ['left', 'right'] as const) {
+    const hand = hands[side];
+    const g = gestures[side];
+    if (!hand || !g) continue;
+    viewport.viewToScreen(pinchPointInto(pinchView[side], hand), pinchScreen[side]);
+    const p = pinchScreen[side];
+    const phase = g.pinch.phase;
+    if (phase === 'candidate') {
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = colors[side];
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (phase === 'active') {
+      ctx.fillStyle = colors[side];
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  const l = pinchScreen.left;
+  const r = pinchScreen.right;
+  const two = gestures.twoHand;
+  if (!bothVisible || !hands.left || !hands.right) return;
+  ctx.strokeStyle = two.active ? '#ffffff' : 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = two.active ? 2.5 : 1.5;
+  if (!two.active) ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(l.x, l.y);
+  ctx.lineTo(r.x, r.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (!two.active) return;
+
+  viewport.viewToScreen(two.center, centerScreen);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(centerScreen.x, centerScreen.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  const text = twoHandText(two.scale, two.rotation);
+  ctx.font = '600 13px system-ui, sans-serif';
+  const tw = ctx.measureText(text).width;
+  ctx.fillStyle = 'rgba(5, 7, 11, 0.72)';
+  ctx.beginPath();
+  ctx.roundRect(centerScreen.x - tw / 2 - 9, centerScreen.y - 38, tw + 18, 24, 12);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, centerScreen.x - tw / 2, centerScreen.y - 26);
 }

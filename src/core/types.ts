@@ -36,8 +36,10 @@ export interface TrackedHand {
   score: number;
   /** 21 points, tracker-native normalized (un-mirrored), immutable. */
   rawLandmarks: readonly Vec3[];
-  /** 21 points, smoothed, VIEW-normalized (mirrored); z = tracker relative z. */
+  /** 21 points, VISUAL smoothing profile (stronger), VIEW-normalized (mirrored); z = tracker z. */
   landmarks: readonly Vec3[];
+  /** 21 points, TRIGGER smoothing profile (lighter, lower lag) — gesture metrics use these. */
+  triggerLandmarks: readonly Vec3[];
   worldLandmarks?: readonly Vec3[];
   /** Aspect-corrected, view-normalized units. */
   palmScale: number;
@@ -97,6 +99,11 @@ export interface TwoHandState {
   rotation: number;
   /** center - baselineCenter */
   translation: Vec2;
+  /**
+   * Set on the `justStarted` frame when the second hand joined within TWO_HAND_JOIN_MS of the
+   * first hand's pinch: that first hand's single-hand action (voxel, stroke…) must be undone.
+   */
+  cancelFirstHand: HandSide | null;
 }
 
 export interface GestureFrame {

@@ -13,9 +13,10 @@ import {
   type LandmarkFixture,
 } from '@/core/input';
 import { FpsMeter, InferenceStats, RenderLoop } from '@/core/renderLoop';
-import type { HandFrame, HandSide } from '@/core/types';
+import type { GestureFrame, GesturePhase, HandFrame, HandSide } from '@/core/types';
+import { describeHand, GestureEngine } from '@/gestures/GestureEngine';
 import { CameraBackground } from '@/scene/CameraBackground';
-import { drawHandSkeleton, OverlayCanvas2D } from '@/scene/overlay';
+import { drawGestureIndicators, drawHandSkeleton, OverlayCanvas2D } from '@/scene/overlay';
 import { SceneManager } from '@/scene/SceneManager';
 import { ViewportMapper } from '@/spatial/ViewportMapper';
 import { useAppStore } from '@/state/appStore';
@@ -83,14 +84,28 @@ export interface DebugSnapshot {
   video: { width: number; height: number };
   viewport: { width: number; height: number; dpr: number };
   mirror: boolean;
+  /** Main-user lock at the last inference. */
+  userLock: { detected: number; gated: number; used: number; identityLocked: boolean };
+  smoothingHz: number;
   hands: {
     side: HandSide;
     rawLabel: string;
     score: number;
     palmScale: number;
+    lostForMs: number;
     wrist: { x: number; y: number };
+    gestures: { name: string; phase: GesturePhase; value: number }[];
   }[];
+  twoHand: {
+    active: boolean;
+    scale: number;
+    rotationDeg: number;
+    distance: number;
+    cancelFirstHand: HandSide | null;
+  };
 }
+
+const GESTURE_NAMES = ['pinch', 'grab', 'point', 'openPalm', 'thumbPinky'] as const;
 
 // ---------------------------------------------------------------------------------------------
 // Core
@@ -101,6 +116,7 @@ export class Core {
   readonly viewport = new ViewportMapper();
   readonly tracker = new HandTracker();
   readonly normalizer = new HandNormalizer();
+  readonly gestureEngine = new GestureEngine();
   readonly recorder = new FixtureRecorder();
   readonly inferenceStats = new InferenceStats();
   readonly sceneManager: SceneManager;
@@ -150,6 +166,11 @@ export class Core {
     return this.normalizer.frame;
   }
 
+  /** Latest gesture output (reused object, updated every render frame). */
+  get gestures(): GestureFrame {
+    return this.gestureEngine.frame;
+  }
+
   get playbackActive(): boolean {
     return this.playback !== null;
   }
@@ -196,7 +217,7 @@ export class Core {
     this.playback?.dispose();
     this.playback = new FixturePlaybackSource(fixture, performance.now());
     this.input = this.playback;
-    this.normalizer.clear(performance.now());
+    this.resetPerception();
     this.updateLoop();
     log.info(`playing fixture "${fixture.name}" (${fixture.frames.length} frames)`);
   }
@@ -206,7 +227,7 @@ export class Core {
     this.playback.dispose();
     this.playback = null;
     this.input = this.live;
-    this.normalizer.clear(performance.now());
+    this.resetPerception();
     this.updateLoop();
   }
 
@@ -217,14 +238,25 @@ export class Core {
       if (!h) continue;
       const slot = this.normalizer.slots[side];
       const w = h.landmarks[WRIST];
+      const g = this.gestures[side];
       hands.push({
         side,
         rawLabel: slot.rawLabel,
         score: h.score,
         palmScale: h.palmScale,
+        lostForMs: h.lostForMs,
         wrist: { x: w?.x ?? 0, y: w?.y ?? 0 },
+        gestures: g
+          ? GESTURE_NAMES.map((name) => ({
+              name,
+              phase: g[name].phase,
+              value: g[name].value,
+            }))
+          : [],
       });
     }
+    const two = this.gestures.twoHand;
+    const n = this.normalizer;
     const s = this.inferenceStats;
     return {
       renderFps: this.fps.fps,
@@ -251,7 +283,21 @@ export class Core {
         dpr: this.sceneManager.renderer.getPixelRatio(),
       },
       mirror: this.viewport.mirror,
+      userLock: {
+        detected: n.detectedCount,
+        gated: n.gatedCount,
+        used: n.usedCount,
+        identityLocked: n.identityLocked,
+      },
+      smoothingHz: n.visualMinCutoff,
       hands,
+      twoHand: {
+        active: two.active,
+        scale: two.scale,
+        rotationDeg: (two.rotation * 180) / Math.PI,
+        distance: two.distance,
+        cancelFirstHand: two.cancelFirstHand,
+      },
     };
   }
 
@@ -281,12 +327,19 @@ export class Core {
   private readonly frame = (now: number): void => {
     this.syncViewport(); // cheap no-op unless the video or viewport size changed
 
-    // 1–2. Inference on a new video frame (throttled) → normalized HandFrame.
+    // 1–2. Inference on a new video frame (throttled) → gated, main-user-locked, smoothed HandFrame.
     const det = this.input.poll(now);
     if (det) {
       if (this.input === this.live) this.recorder.record(det);
       this.normalizer.process(det, this.viewport.mirror, now);
+    } else {
+      this.normalizer.tick(now); // loss grace period runs every frame
     }
+
+    // 3. Gestures (every frame, so justStarted/justEnded last exactly one frame).
+    this.gestureEngine.update(this.hands, this.viewport.videoAspect, now);
+    // While a gesture holds something, lock hand identities by proximity (§8 hands crossing).
+    this.normalizer.setIdentityLock(this.gestureEngine.capturing);
 
     // 6. Render: camera background + 3D scene → 2D overlay.
     this.renderFrame();
@@ -308,19 +361,34 @@ export class Core {
       if (left) drawHandSkeleton(ov.ctx, left, this.viewport);
       if (right) drawHandSkeleton(ov.ctx, right, this.viewport);
     }
+    drawGestureIndicators(
+      ov.ctx,
+      this.hands,
+      this.gestures,
+      this.gestureEngine.bothHandsVisible,
+      this.viewport,
+    );
   }
 
-  /** Push hand presence to the UI at ≤ statusHz, and only when it changes. */
+  /** Push hand/gesture status to the UI at ≤ statusHz, and only when it changes. */
   private pushStatus(now: number): void {
     if (now - this.lastStatusPush < 1000 / TUNING.ui.statusHz) return;
     this.lastStatusPush = now;
     const { left, right } = this.hands;
-    const key = `${right ? 'R' : '-'}${left ? 'L' : '-'}`;
-    if (key === this.statusKey) return;
-    this.statusKey = key;
+    const g = this.gestures;
+    const two = g.twoHand.active ? ' · Two-hand ✓' : '';
+    const text = `Right: ${describeHand(right, g.right)} · Left: ${describeHand(left, g.left)}${two}`;
+    if (text === this.statusKey) return;
+    this.statusKey = text;
     const store = useAppStore.getState();
-    store.setHandCount((left ? 1 : 0) + (right ? 1 : 0));
-    store.setStatusText(`Right: ${right ? 'tracked' : '—'} · Left: ${left ? 'tracked' : '—'}`);
+    const count = (left ? 1 : 0) + (right ? 1 : 0);
+    if (store.handCount !== count) store.setHandCount(count);
+    store.setStatusText(text);
+  }
+
+  private resetPerception(): void {
+    this.normalizer.clear(performance.now());
+    this.gestureEngine.reset();
   }
 
   private resetStatus(): void {
@@ -357,7 +425,7 @@ export class Core {
     counters.renderLoopsActive--;
     this.fps.reset();
     this.inferenceStats.reset();
-    this.normalizer.clear(performance.now());
+    this.resetPerception();
     this.overlay.clear();
     this.resetStatus();
     useAppStore.getState().setFps(0);

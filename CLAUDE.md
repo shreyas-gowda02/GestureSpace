@@ -36,8 +36,8 @@ gesture engine and ONE renderer. Everything runs locally; no backend, no uploads
 | 0     | Foundation (tooling, shell, lean structure)                          | ✅ done                                                                   | `18c7bbb`, `f4d6d00` |
 | 1     | Camera (permission flow, mirrored cover-crop background)             | ✅ done — **awaiting user's real-webcam confirmation**                    | `80f5c7f`            |
 | 2     | Hand tracker                                                         | ✅ done — handedness fixed after user's real-hand test; awaiting re-check | `phase-2` commits    |
-| 3     | Smoothing + gestures (**M0** demo)                                   | ⏭ **next**                                                                | —                    |
-| 4     | Spatial cursor + ModeController                                      | ⬜                                                                        | —                    |
+| 3     | Smoothing + gestures + main-user lock (**M0** demo)                  | ✅ done — awaiting user's real-hand check                                 | `phase-3` commit     |
+| 4     | Spatial cursor + ModeController                                      | ⏭ **next**                                                                | —                    |
 | 5     | Voxel Builder (**M1** demo)                                          | ⬜                                                                        | —                    |
 | 6     | Two-hand transform core                                              | ⬜                                                                        | —                    |
 | 7     | Spatial Panel + Texture Surface                                      | ⬜                                                                        | —                    |
@@ -57,14 +57,20 @@ loads once when the camera first starts, ~0.8 s), live two-hand skeleton overlay
 video (right = turquoise, left = magenta, with side + confidence label), "Loading hand tracker…" /
 "Show your hand to the camera" notices, tracker error + Retry, status bar "Right: tracked · Left: —",
 Debug panel (backtick key) with render/inference rates, inference ms, skipped frames, delegate,
-per-hand data, and a landmark fixture recorder/player. 62 tests (unit + integration) passing.
+per-hand data, and a landmark fixture recorder/player. **Phase 3:** One Euro smoothing (visual + trigger
+profiles), confidence gate, jump rejection, 150 ms loss grace (hand drawn faded, status "lost…"),
+**main-user lock** (detects up to 4 hands, keeps one person's pair — see D23), stable left/right
+(label hysteresis + identity lock while a gesture holds), gestures pinch / grab / point / open palm /
+thumb-pinky (+ swipe, off) with hysteresis + debounce, two-hand pinch (scale / rotation /
+translation vs baseline), pinch ring + two-hand line/centre/×scale·angle overlay, status bar
+"Right: pinch · Left: open · Two-hand ✓", Debug panel gesture chips + main-user stats.
+95 tests passing.
 
-**What does not work yet:** no smoothing (skeleton jitters slightly), no gestures, no experiences (dock only switches the
+**What does not work yet:** gestures don't DO anything yet (no 3D cursor / modes), no experiences (dock only switches the
 label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings buttons only toggle state
 (panels not built).
 
-**Pushed to GitHub:** up to `6e88c4d` (CLAUDE.md handoff). The Phase 2 commit is **local only**
-until the user runs `git push`.
+**Pushed to GitHub:** check with `git status` (the user pushes manually with `git push`).
 
 ---
 
@@ -74,10 +80,11 @@ until the user runs `git push`.
 2. `npm install` if `node_modules/` is missing (postinstall copies MediaPipe WASM into
    `public/mediapipe/wasm/`).
 3. Run the phase gate once to confirm a green baseline (see §5).
-4. Ask the user for the pending real-camera checks: Phase 1 (mirrored, full-screen, no stretching)
-   and Phase 2 re-check (after the D16 fix: PHYSICAL right hand → turquoise "Right"). Also ask
-   for the Debug panel's inference Hz / ms on their machine.
-5. Start **Phase 3 — Smoothing + gestures** (§7 below). Stop after it and report in the §5 format.
+4. Ask the user for the pending real-camera checks: Phase 3 gestures (pinch, fist, point, open
+   palm, thumb-pinky, two-hand pinch), steadiness when still, and the main-user lock with a second
+   person in view. Also ask for the Debug panel's inference Hz / ms. Tune thresholds in
+   `config/tuning.ts` from their feedback if needed.
+5. Start **Phase 4 — Spatial cursor + ModeController** (§7 below). Stop after it and report.
 
 The user replies **"continue"** to approve moving to the next phase. Never start the next phase
 without that.
@@ -162,6 +169,13 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D20 | Synthetic fixture generator `scripts/make-synthetic-fixture.mjs` → committed `tests/fixtures/landmarks/synthetic-two-hands.json` (labels follow the verified convention: physical right hand = MediaPipe "Right"); `tests/fixtures` excluded from Prettier                                                                                                                       | Test + demo the pipeline without a camera (browser pane blocks webcams)                                       |
 | D21 | Ambiguous handedness (both hands same label) is resolved by **on-screen position**: the hand displayed on the right is the right hand (uses the mirror setting)                                                                                                                                                                                                                  | MediaPipe occasionally mislabels; the view is meant to look like a mirror                                     |
 | D22 | Model/WASM paths are `BASE_URL`-relative (`models/…`, `mediapipe/wasm`)                                                                                                                                                                                                                                                                                                          | Works on sub-path deploys                                                                                     |
+| D23 | **Main-user lock** (user chose this over multi-user, 2026-09-24): `numHands: 4`; `HandNormalizer.select()` keeps ONE person's pair — continue tracked hands (≤ `userLock.matchMaxDist`), else the largest hand (closest person), plus a partner of similar palm scale (0.6–1.65×) within 14 palms. Costs a little extra inference time (palm detector runs every frame)          | People in the background must not steal tracking                                                              |
+| D24 | One Euro `beta` is per **view-unit/s**: visual 8, trigger 20 (spec's 0.007 assumed pixels). Visual minCutoff comes from the Smoothing slider (`smoothingToMinCutoff`, default 0.65 → ≈1.25 Hz)                                                                                                                                                                                   | Spec values would lag badly in normalized units                                                               |
+| D25 | Grab = **farthest** fingertip→palm-centre / palm (< 0.6 start, > 0.75 end); a fist never counts as a pinch (`pinchGestureValue`)                                                                                                                                                                                                                                                 | Mean-based grab fired on 'point'; fists read as pinches                                                       |
+| D26 | Contract extensions: `TrackedHand.triggerLandmarks`, `TwoHandState.cancelFirstHand`                                                                                                                                                                                                                                                                                              | Spec §10 trigger profile; §11 precedence rule 2                                                               |
+| D27 | Side stability: a contradicting MediaPipe label must persist 3 inferences (`labelSwitchFrames`); while `GestureEngine.capturing` (pinch/grab/two-hand active) sides follow proximity only                                                                                                                                                                                        | §8 hands crossing; label flicker                                                                              |
+| D28 | Precedence rule 2 → `singleHandPinchAllowed()` + `cancelFirstHand`. Rule 1 (UI consumes gestures) and rules 3–4 (release to capturer, no capture survives a mode switch) are implemented with CaptureManager/ModeController in Phase 4                                                                                                                                           | Need those systems first                                                                                      |
+| D29 | Synthetic hand generator is TypeScript: `tests/fixtures/syntheticHands.ts` (poses open/fist/point/pinch/thumbPinky + scenarios wave/pinch/tour/two-hand stretch/crowd); `node scripts/make-fixtures.ts` (Node 24 runs TS) regenerates the committed wave JSON. Replaced the old `.mjs` script                                                                                    | One generator for tests, demos and the browser pane                                                           |
 
 ---
 
@@ -175,7 +189,9 @@ in the same phase.
 Built as planned — see §9 for what exists. User's real-hand test found left/right reversed →
 fixed (D16, D21). Pending: user's re-check.
 
-### Phase 3 — Smoothing + gestures (M0: "My browser understands my hands locally")
+### Phase 3 — Smoothing + gestures (M0) ✅ DONE
+
+Built — see §9. Includes the main-user lock (D23). Original plan kept below for reference.
 
 - `vision/smoothing.ts`: One Euro filter per landmark coord; two profiles (visual stronger, trigger
   lighter — gesture metrics use trigger). Settings slider maps to `minCutoff`.
@@ -285,6 +301,37 @@ fixed (D16, D21). Pending: user's re-check.
 
 ---
 
+## 7b. Parked ideas (not now — may come back later)
+
+### Multi-user mode (two or more people controlling GestureSpace together)
+
+**Raised by the user on 2026-09-24** after testing with a friend: with four hands in view, only one
+pair was tracked. We chose the **main-user lock** (D23) for V1 and parked multi-user as a V2 idea.
+
+- **What it would be:** several people in front of one webcam, each with their own pair of hands,
+  e.g. two people building one voxel structure, one holding the Filter Lab lens while another
+  switches filters, or a "pass the portal" game.
+- **Why parked:** the whole contract assumes ONE user (`HandFrame` has exactly `left`/`right`;
+  `TwoHandState` assumes both hands belong to the same person; `CaptureManager` owns captures per
+  hand side). Tracking 4 hands also costs inference time on every frame, and MediaPipe's palm
+  detector gets less reliable with small/far hands.
+- **Design sketch if we come back to it:**
+  1. `HandNormalizer` → `PeopleTracker`: cluster detections into people (pair hands by palm scale +
+     proximity — the D23 partner logic already does this for one person), give each person a stable
+     `personId` with continuity across frames.
+  2. Contracts: `HandFrame.people: Person[]` where `Person = { id, left?, right?, color }`; keep
+     `left`/`right` as the "primary person" for backwards compatibility with single-user modes.
+  3. `GestureEngine` runs per person; `TwoHandState` per person (optionally a cross-person
+     two-hand state for "two people stretch one panel").
+  4. `CaptureManager` keys captures by `(personId, side)`; conflict rule: first captor wins.
+  5. UI: per-person colours for skeletons/cursors, a "players" indicator, a Settings toggle
+     "Multi-user (experimental)" that raises `numHands` to 4+ only when enabled.
+  6. Perf: measure inference ms at 4 hands on the target laptop before committing (Phase 13 matrix).
+- **Where to start:** `src/vision/handPipeline.ts` (`select()` already scores candidates and
+  pairs a partner), `src/core/types.ts` (`HandFrame`), `src/gestures/GestureEngine.ts`.
+
+---
+
 ## 8. Environment & tooling notes
 
 - **OS:** Windows 11; shells: PowerShell + Git Bash. Node 24 (`.nvmrc`), npm 11.
@@ -338,20 +385,40 @@ blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'` �
   `downloadFixture`.
 - `src/vision/landmarks.ts` — `WRIST … PINKY_TIP`, `FINGERTIPS`, `HAND_CONNECTIONS`, `palmScale`
   (aspect-corrected), `boundsInto`, `makeLandmarkBuffer`.
-- `src/vision/handPipeline.ts` — `HandNormalizer.process(det, mirror, now)` → reused `HandFrame`;
-  `HandSlot` implements `TrackedHand` (preallocated arrays, `rawLabel` for debug); `labelToSide`.
-  **Phase 3 smoothing / confidence gate / grace period go here.**
+- `src/vision/handPipeline.ts` — `HandNormalizer.process(det, mirror, now)` (per inference) and
+  `tick(now)` (every frame, grace period) → reused `HandFrame`. Steps: confidence gate → main-user
+  lock `select()` → `assignSides()` (labels + hysteresis, identity lock) → `updateSlot()` (jump
+  rejection, smoothing, palmScale/bbox). `HandSlot` implements `TrackedHand` + pipeline state.
+  `setIdentityLock()`, `setSmoothing(slider)`, debug counts `detectedCount/gatedCount/usedCount`.
+- `src/vision/smoothing.ts` — `OneEuroFilter`, `LandmarkSmoother` (visual + trigger profiles),
+  `smoothingToMinCutoff(slider)`.
+- `src/gestures/stateMachine.ts` — `GestureStateMachine` (hysteresis, candidateMs, releaseMs,
+  cooldown, `forceRelease`), `makeGestureState`.
+- `src/gestures/detectors.ts` — pure metrics: `pinchValue`, `pinchGestureValue` (fist-exclusive),
+  `grabValue` (max tip distance), `pointValue`, `openPalmValue`, `thumbPinkyValue`,
+  `fingerExtended`, `thumbExtended`, `extendedMask`, `lmDist`.
+- `src/gestures/twoHand.ts` — `TwoHandTracker` (baseline on start, unwrapped rotation,
+  `cancelFirstHand`), `pinchPointInto` (thumb/index midpoint).
+- `src/gestures/GestureEngine.ts` — `GestureEngine.update(hands, aspect, now)` every render frame;
+  `capturing` (drives identity lock); `bothHandsVisible`; helpers `singleHandPinchAllowed`,
+  `describeHand` (status text). Forced release is delivered for one frame when a hand is removed.
+- `src/scene/overlay.ts` also has `drawGestureIndicators` (pinch ring: dashed = candidate, filled =
+  active; two-hand line dashed when both visible, solid + centre dot + "×scale ±deg" when active).
 - `src/scene/overlay.ts` — `OverlayCanvas2D` (DPR-scaled, draw in CSS px) + `drawHandSkeleton`.
 - `Core` (bootstrap) per-frame order: `syncViewport` → `input.poll` → `recorder.record` (live only)
-  → `normalizer.process` → `renderFrame` (WebGL render, overlay clear + skeletons) → FPS →
-  `pushStatus` (≤10 Hz, only on change). Also `playFixture/stopPlayback`, `debugSnapshot()`,
+  → `normalizer.process` (or `tick`) → `gestureEngine.update` → `normalizer.setIdentityLock(
+gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture indicators) → FPS →
+  `pushStatus` (≤10 Hz, only on change). `core.gestures` = latest `GestureFrame`. Also `playFixture/stopPlayback`, `debugSnapshot()`,
   `retryTracker()`. `core.hands` = latest `HandFrame`.
 - `src/ui/DebugPanel.tsx` polls `core.debugSnapshot()` every 250 ms while open; `TrackerNotice`
   lives in `ui/PermissionScreen.tsx`.
 - In the browser pane you can drive the app from JS: find the app's module URL with
   `performance.getEntriesByType('resource')` (it may carry `?t=` after HMR — importing the plain
   URL creates a second module instance), then `getCore().playFixture(parseFixture(json))` with
-  `/tests/fixtures/landmarks/synthetic-two-hands.json` (Vite serves it in dev).
+  `/tests/fixtures/landmarks/synthetic-two-hands.json` (Vite serves it in dev), or import the
+  generator directly: `await import('/tests/fixtures/syntheticHands.ts')` →
+  `getCore().playFixture(synth.gestureTourScenario())` (also `pinchScenario`,
+  `twoHandStretchScenario`, `crowdScenario`, `waveScenario`).
 - `src/state/appStore.ts` — zustand UI state only: activeMode, cameraStatus (`CameraState |
 'loading'`), cameraError, statusText, fps, panel toggles, canUndo/canRedo.
 - `src/config/keybindings.ts` — `resolveKeyAction()` maps every §21.7 shortcut; `App.tsx` handles
@@ -380,3 +447,11 @@ blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'` �
   reversed. Set `HANDEDNESS_LABEL_SWAP = false` (D16), changed the tie-break to on-screen position
   (D21), regenerated the synthetic fixture with real-webcam label convention, tests now use the
   real TUNING value. **Next:** user re-checks handedness + reports inference Hz/ms, then Phase 3.
+- **2026-09-24 — Session 1 (cont.).** User tested with a friend: 4 hands in view → only one pair
+  tracked. User chose the **main-user lock** (D23) and asked to park multi-user (§7b). Phase 3
+  built: smoothing, gate, jump rejection, grace, main-user lock, side stability, gesture machines,
+  detectors, two-hand, engine, overlay indicators, status, debug panel. Found + fixed during tests:
+  spec One Euro beta in pixel units (D24), grab mean fired on "point" and fists read as pinches
+  (D25), partner distance too tight for spread arms (14 palms). Verified in the browser pane via
+  synthetic scenarios (tour order, two-hand ✓, crowd 4 detected / 2 used). **Next:** user's
+  real-hand gesture check, then Phase 4.

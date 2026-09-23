@@ -76,8 +76,8 @@ src/
               FixtureRecorder, parseFixture — fixtures store tracker-native RawDetections)
   vision/     HandTracker.ts (P2: one HandLandmarker, GPU→CPU, dynamic import)
               landmarks.ts (P2: named indices, HAND_CONNECTIONS, palmScale, bounds)
-              handPipeline.ts (P2: HandNormalizer — handedness swap, mirror, HandSlot reuse;
-              P3 adds smoothing, confidence gate, grace period)
+              handPipeline.ts (P2/P3: HandNormalizer — gate, main-user lock, side stability,
+              jump rejection, smoothing, grace period; HandSlot reuse)
               smoothing.ts (P3: OneEuroFilter + LandmarkSmoother)
   gestures/   GestureEngine.ts (P3: engine + precedence) · stateMachine.ts (P3)
               detectors.ts (P3: pinch, point, grab, openPalm, thumbPinky, swipe) · twoHand.ts (P3)
@@ -102,7 +102,9 @@ src/
               overlays.tsx (P12: Help, Settings, Onboarding) · toolPanels.tsx (per-mode controls)
   state/      appStore.ts (UI-only zustand) · persistence.ts (P12: settings, scenes, serializers)
   utils/      math.ts (scalar + vector helpers) · logger.ts
-tests/        unit/ · integration/ · fixtures/landmarks/ · e2e/
+tests/        unit/ · integration/ · e2e/
+              fixtures/syntheticHands.ts (pose + scenario generator) · fixtures/landmarks/*.json
+scripts/      copy-mediapipe-assets.mjs · fetch-model.mjs · make-fixtures.ts (node runs TS)
 docs/         (P13, per §28) ARCHITECTURE, GESTURES, MODES, PERFORMANCE, TROUBLESHOOTING
 ```
 

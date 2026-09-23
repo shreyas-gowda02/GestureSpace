@@ -94,13 +94,17 @@ describe('HandNormalizer', () => {
   it('resolves duplicate labels by on-screen position (hand shown on the right = right)', () => {
     const n = new HandNormalizer({ swapLabels: false });
     // Mirrored view: raw x 0.2 is displayed at 0.8 (right of screen).
-    const f = n.process(det([rawHand('Left', 0.8), rawHand('Left', 0.2)]), true, 0);
-    expect(f.right?.landmarks[WRIST]?.x).toBeCloseTo(0.8);
-    expect(f.left?.landmarks[WRIST]?.x).toBeCloseTo(0.2);
+    const f = n.process(det([rawHand('Left', 0.65), rawHand('Left', 0.35)]), true, 0);
+    expect(f.right?.landmarks[WRIST]?.x).toBeCloseTo(0.65);
+    expect(f.left?.landmarks[WRIST]?.x).toBeCloseTo(0.35);
     // Un-mirrored view: raw x is the screen position.
-    const g = n.process(det([rawHand('Right', 0.8), rawHand('Right', 0.2)]), false, 1);
-    expect(g.right?.landmarks[WRIST]?.x).toBeCloseTo(0.8);
-    expect(g.left?.landmarks[WRIST]?.x).toBeCloseTo(0.2);
+    const g = new HandNormalizer({ swapLabels: false }).process(
+      det([rawHand('Right', 0.65), rawHand('Right', 0.35)]),
+      false,
+      1,
+    );
+    expect(g.right?.landmarks[WRIST]?.x).toBeCloseTo(0.65);
+    expect(g.left?.landmarks[WRIST]?.x).toBeCloseTo(0.35);
   });
 
   it('uses MediaPipe labels as-is by default (verified on a real webcam)', () => {
@@ -120,13 +124,115 @@ describe('HandNormalizer', () => {
     expect(b.right?.landmarks).toBe(lmsA);
   });
 
-  it('drops hands that disappear and clears on demand', () => {
+  it('keeps a vanished hand frozen for the grace period, then drops it; clears on demand', () => {
     const n = new HandNormalizer({ swapLabels: true });
     n.process(det([rawHand('Left', 0.3), rawHand('Right', 0.7)]), true, 0);
-    const f = n.process(det([rawHand('Right', 0.7)]), true, 1);
-    expect(f.right).toBeUndefined();
+    const f = n.process(det([rawHand('Right', 0.7)]), true, 10);
     expect(f.left).toBeDefined();
-    n.clear(2);
+    expect(f.right).toBeDefined(); // still here, frozen…
+    expect(n.tick(100).right?.lostForMs).toBe(90); // …counting its loss time
+    expect(n.tick(200).right).toBeUndefined(); // > 150 ms grace → gone
+    n.clear(300);
     expect(n.frame.left).toBeUndefined();
+  });
+});
+
+/** Hand with a given palm size: wrist at (x, y), middle MCP `palm` above it (raw image coords). */
+function sizedHand(label: string, x: number, y: number, palm: number): RawHand {
+  const landmarks: Vec3[] = makeLandmarkBuffer().map(() => ({ x, y: y - palm / 2, z: 0 }));
+  landmarks[WRIST] = { x, y, z: 0 };
+  landmarks[MIDDLE_MCP] = { x, y: y - palm, z: 0 };
+  return { handedness: label, score: 0.95, landmarks };
+}
+
+describe('main-user lock', () => {
+  it('keeps the closest person (largest hands) and ignores background hands', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    const f = n.process(
+      det([
+        sizedHand('Right', 0.1, 0.4, 0.07), // background person, listed first
+        sizedHand('Left', 0.9, 0.4, 0.07),
+        sizedHand('Right', 0.35, 0.75, 0.16), // main user
+        sizedHand('Left', 0.65, 0.75, 0.16),
+      ]),
+      true,
+      0,
+    );
+    expect(n.detectedCount).toBe(4);
+    expect(n.usedCount).toBe(2);
+    expect(f.right?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.35);
+    expect(f.left?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.65);
+  });
+
+  it('never takes a much smaller background hand as the second hand', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    const f = n.process(
+      det([sizedHand('Left', 0.9, 0.4, 0.07), sizedHand('Right', 0.35, 0.75, 0.16)]),
+      true,
+      0,
+    );
+    expect(n.usedCount).toBe(1);
+    expect(f.right).toBeDefined();
+    expect(f.left).toBeUndefined();
+  });
+
+  it('keeps following the tracked user when someone closer walks in', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    n.process(det([sizedHand('Right', 0.35, 0.75, 0.12)]), true, 0);
+    const f = n.process(
+      det([sizedHand('Right', 0.8, 0.6, 0.2), sizedHand('Right', 0.36, 0.75, 0.12)]),
+      true,
+      33,
+    );
+    expect(f.right?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.36);
+  });
+
+  it('ignores hands below the confidence gate', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    const weak = { ...sizedHand('Right', 0.35, 0.75, 0.16), score: 0.3 };
+    expect(n.process(det([weak]), true, 0).right).toBeUndefined();
+    expect(n.gatedCount).toBe(0);
+  });
+});
+
+describe('side stability', () => {
+  it('a contradicting label must persist before a tracked hand switches sides', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    n.process(det([sizedHand('Right', 0.35, 0.75, 0.16)]), true, 0);
+    const wrong = (t: number) => n.process(det([sizedHand('Left', 0.35, 0.75, 0.16)]), true, t);
+    expect(wrong(33).right).toBeDefined(); // 1 disagreeing frame
+    expect(wrong(66).right).toBeDefined(); // 2
+    const f = wrong(99); // 3 → accept the label
+    expect(f.left).toBeDefined();
+  });
+
+  it('while identity is locked (a capture is active), labels cannot swap hands', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    n.process(
+      det([sizedHand('Right', 0.35, 0.75, 0.16), sizedHand('Left', 0.65, 0.75, 0.16)]),
+      true,
+      0,
+    );
+    n.setIdentityLock(true);
+    for (let i = 1; i <= 6; i++) {
+      // MediaPipe swaps the labels (e.g. hands crossing) — ignored while locked.
+      const f = n.process(
+        det([sizedHand('Left', 0.35, 0.75, 0.16), sizedHand('Right', 0.65, 0.75, 0.16)]),
+        true,
+        i * 33,
+      );
+      expect(f.right?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.35);
+      expect(f.left?.rawLandmarks[WRIST]?.x).toBeCloseTo(0.65);
+    }
+  });
+
+  it('rejects a single impossible jump, but accepts it if it persists', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    n.process(det([sizedHand('Right', 0.35, 0.5, 0.16)]), true, 0);
+    // 0.28 jump in y: within the continuity radius but above MAX_JUMP.
+    let f = n.process(det([sizedHand('Right', 0.35, 0.78, 0.16)]), true, 33);
+    expect(f.right?.rawLandmarks[WRIST]?.y).toBeCloseTo(0.5); // ignored once
+    f = n.process(det([sizedHand('Right', 0.35, 0.78, 0.16)]), true, 66);
+    expect(f.right?.rawLandmarks[WRIST]?.y).toBeCloseTo(0.78); // persistent → accepted
   });
 });

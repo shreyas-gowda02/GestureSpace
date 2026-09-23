@@ -20,7 +20,7 @@
 ## Status
 
 🚧 Under construction — built phase by phase (see `GestureSpace_Build_Prompt.md` §26).
-Current: **Phase 2 — Hand tracker** (MediaPipe two-hand tracking with a live skeleton overlay + debug panel).
+Current: **Phase 3 — Smoothing + gestures** (stable hands, pinch/grab/point/open/thumb-pinky, two-hand pinch, main-user lock).
 
 ## Quick start
 

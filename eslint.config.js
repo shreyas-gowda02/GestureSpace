@@ -39,7 +39,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['scripts/**/*.mjs', '*.config.{js,ts}', 'tests/e2e/**/*.ts'],
+    files: ['scripts/**/*.{mjs,ts}', '*.config.{js,ts}', 'tests/e2e/**/*.ts'],
     languageOptions: { globals: globals.node },
   },
   prettier,

@@ -232,6 +232,33 @@ kbd {
   border-color: var(--gs-magenta);
 }
 
+.gs-debug__gestures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.gs-debug__gesture {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  border: 1px solid var(--gs-glass-border);
+  color: var(--gs-text-dim);
+}
+
+.gs-debug__gesture.is-candidate {
+  color: var(--gs-amber);
+  border-color: rgba(255, 182, 46, 0.45);
+}
+
+.gs-debug__gesture.is-active,
+.gs-debug__gesture.is-released {
+  color: var(--gs-bg);
+  background: var(--gs-lime);
+  border-color: transparent;
+}
+
 .gs-debug__buttons {
   display: flex;
   gap: 6px;

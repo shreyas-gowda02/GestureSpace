@@ -12,7 +12,11 @@ export const TUNING = {
     /** Relative to Vite's BASE_URL so sub-path deployments keep working. */
     modelAssetPath: 'models/hand_landmarker.task',
     wasmBasePath: 'mediapipe/wasm',
-    numHands: 2,
+    /**
+     * Detect up to 4 hands so the main-user lock (handPipeline) can pick the MAIN user's pair
+     * and ignore people in the background. Only 2 hands are ever used (single-user app).
+     */
+    numHands: 4,
     minHandDetectionConfidence: 0.5,
     minHandPresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,
@@ -49,20 +53,40 @@ export const TUNING = {
   },
 
   smoothing: {
-    /** Visual profile: stronger, for overlays/objects. */
-    visual: { minCutoff: 1.0, beta: 0.007, dCutoff: 1.0 },
-    /** Trigger profile: lighter, for gesture distances. */
-    trigger: { minCutoff: 2.5, beta: 0.02, dCutoff: 1.0 },
-    /** Settings slider (0..1) maps onto visual.minCutoff within this range. */
-    sliderMinCutoffRange: [0.3, 3.0],
+    // One Euro filter. Units: coordinates are view-normalized (0..1), so `beta` is per
+    // view-unit/s. (The spec's beta ≈ 0.007 assumed pixels: 0.007 × ~1280 px ≈ 9 per unit.)
+    /** Visual profile: stronger, for overlays/objects. minCutoff comes from the Smoothing slider. */
+    visual: { beta: 8, dCutoff: 1.0 },
+    /** Trigger profile: lighter / lower lag, for gesture distances. */
+    trigger: { minCutoff: 2.5, beta: 20, dCutoff: 1.0 },
+    /** Smoothing slider 0..1 → visual minCutoff (Hz): 0 = responsive (max), 1 = smooth (min). */
+    sliderMinCutoffRange: { min: 0.3, max: 3.0 },
     defaultSlider: 0.65,
   },
 
   confidence: {
+    /** Handedness/detection score below which a detection is ignored. */
     MIN_HAND_SCORE: 0.6,
-    /** Max wrist travel (view units) per inference step before the sample is rejected. */
+    /** Max wrist travel (aspect-corrected view units) per inference before the sample is rejected. */
     MAX_JUMP: 0.25,
+    /** A jump seen this many inferences in a row is accepted as real (filters reset). */
+    JUMP_ACCEPT_AFTER: 2,
     HAND_LOSS_GRACE_MS: 150,
+  },
+
+  /** Main-user lock: pick ONE person's two hands when several people are in view. */
+  userLock: {
+    /** Max wrist distance (aspect-corrected view units) to continue an already-tracked hand. */
+    matchMaxDist: 0.3,
+    /** A second hand joins the main user only if its palm scale is within this ratio of theirs… */
+    partnerScaleRatio: { min: 0.6, max: 1.65 },
+    /**
+     * …and its wrist is within this many of the main user's palm lengths (arms spread wide for a
+     * two-hand stretch can reach ~12). Background people are mostly rejected by the scale ratio.
+     */
+    partnerMaxDistPalms: 14,
+    /** Consecutive inferences a contradicting handedness label must persist before sides flip. */
+    labelSwitchFrames: 3,
   },
 
   gestures: {
@@ -72,8 +96,15 @@ export const TUNING = {
     pinch: { start: 0.35, end: 0.5 },
     /** Tip must be this much farther from the wrist than the PIP to count as extended. */
     fingerExtendedRatio: 1.15,
-    grab: { start: 0.9, end: 1.1 },
+    /** Thumb tip vs thumb MCP distance to the pinky MCP, for "thumb extended". */
+    thumbExtendedRatio: 1.1,
+    /**
+     * Farthest fingertip→palm-centre distance / palmScale. Open hand ≈ 1.1, fist ≈ 0.2–0.4
+     * (the spec's 0.9/1.1 guess sat right on an open hand).
+     */
+    grab: { start: 0.6, end: 0.75 },
     thumbPinky: { start: 0.35, end: 0.5, cooldownMs: 400 },
+    /** minVelocity in aspect-corrected view units / second. */
     swipe: { enabled: false, minVelocity: 2.0, windowMs: 120, cooldownMs: 500 },
     TWO_HAND_JOIN_MS: 150,
   },
