@@ -43,7 +43,9 @@ test('hand tracker loads once and the debug panel reports it', async ({ page }) 
   await expect(page.getByText('Show your hand to the camera')).toBeVisible({ timeout: 30_000 });
   await page.keyboard.press('`');
   await expect(page.getByLabel('Debug panel')).toContainText(/ready · (GPU|CPU)/);
-  expect(await page.evaluate(() => window.__gs_debug?.trackersCreated)).toBe(1);
+  const counters = await page.evaluate(() => window.__gs_debug);
+  expect(counters?.trackersCreated).toBe(1);
+  expect(counters?.visionWorkers ?? 0).toBeLessThanOrEqual(1);
 });
 
 test('switching through all seven experiences never duplicates the core or renderer', async ({

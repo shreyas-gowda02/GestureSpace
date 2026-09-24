@@ -1,6 +1,8 @@
 // The ONE MediaPipe HandLandmarker (§2 rule 2, §9). Loads once (idempotent), GPU delegate with
 // CPU fallback, self-hosted model + WASM. The MediaPipe bundle is dynamically imported so it is
 // only downloaded once the camera is actually enabled.
+// Runs inside the vision Web Worker by default (workers/visionWorker.ts, with `moduleWasm`), or on
+// the main thread as a fallback. Both expose the same TrackerBackend status interface.
 
 import type { HandLandmarker, HandLandmarkerResult } from '@mediapipe/tasks-vision';
 import { TUNING } from '@/config/tuning';
@@ -12,11 +14,43 @@ export type TrackerStatus = 'idle' | 'loading' | 'ready' | 'error';
 export type TrackerDelegate = 'GPU' | 'CPU';
 export type TrackerResult = HandLandmarkerResult;
 
-type Listener = (tracker: HandTracker) => void;
+/** Where inference runs. */
+export type TrackerThread = 'worker' | 'main';
 
-const assetUrl = (path: string): string => `${import.meta.env.BASE_URL}${path}`;
+/** Status surface shared by the main-thread HandTracker and the worker proxy (WorkerTracker). */
+export interface TrackerBackend {
+  readonly thread: TrackerThread;
+  readonly status: TrackerStatus;
+  readonly delegate: TrackerDelegate | null;
+  readonly error: string | null;
+  /** Wall time the last successful load took (ms). */
+  readonly loadMs: number;
+  readonly ready: boolean;
+  onChange(listener: (tracker: TrackerBackend) => void): () => void;
+  load(): Promise<void>;
+  dispose(): void;
+}
 
-export class HandTracker {
+export interface HandTrackerOptions {
+  /**
+   * Load MediaPipe's ES-module WASM build (required inside a module Web Worker, where the
+   * classic loader's importScripts() is unavailable).
+   */
+  moduleWasm?: boolean;
+}
+
+type Listener = (tracker: TrackerBackend) => void;
+
+/**
+ * Absolute asset URL (works on the page and in the worker). Absolute on purpose: Vite's dev
+ * server rewrites root-relative dynamic imports to `…?import`, which breaks MediaPipe's
+ * runtime import of its WASM loader inside the worker.
+ */
+const assetUrl = (path: string): string =>
+  new URL(`${import.meta.env.BASE_URL}${path}`, self.location.href).href;
+
+export class HandTracker implements TrackerBackend {
+  readonly thread: TrackerThread = 'main';
   status: TrackerStatus = 'idle';
   delegate: TrackerDelegate | null = null;
   error: string | null = null;
@@ -27,6 +61,11 @@ export class HandTracker {
   private loading: Promise<void> | null = null;
   private disposed = false;
   private readonly listeners = new Set<Listener>();
+  private readonly moduleWasm: boolean;
+
+  constructor(opts: HandTrackerOptions = {}) {
+    this.moduleWasm = opts.moduleWasm ?? false;
+  }
 
   get ready(): boolean {
     return this.status === 'ready' && this.landmarker !== null;
@@ -43,10 +82,10 @@ export class HandTracker {
     return this.loading;
   }
 
-  /** Synchronous inference on the current video frame. Only call when `ready`. */
-  detect(video: HTMLVideoElement, timestampMs: number): TrackerResult {
+  /** Synchronous inference on one frame (video element, ImageBitmap…). Only call when `ready`. */
+  detect(image: TexImageSource, timestampMs: number): TrackerResult {
     if (!this.landmarker) throw new Error('HandTracker.detect() called before load');
-    return this.landmarker.detectForVideo(video, timestampMs);
+    return this.landmarker.detectForVideo(image, timestampMs);
   }
 
   dispose(): void {
@@ -62,7 +101,10 @@ export class HandTracker {
     this.setStatus('loading');
     try {
       const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision');
-      const fileset = await FilesetResolver.forVisionTasks(assetUrl(TUNING.tracker.wasmBasePath));
+      const fileset = await FilesetResolver.forVisionTasks(
+        assetUrl(TUNING.tracker.wasmBasePath),
+        this.moduleWasm,
+      );
       const t = TUNING.tracker;
       const create = (delegate: TrackerDelegate) =>
         HandLandmarker.createFromOptions(fileset, {

@@ -170,6 +170,7 @@ export function DebugPanel() {
             <Row label="Tracker">
               {snap.tracker.status}
               {snap.tracker.delegate && ` · ${snap.tracker.delegate}`}
+              {snap.tracker.thread === 'worker' ? ' · worker' : ' · main thread'}
               {snap.tracker.loadMs > 0 && ` · loaded in ${Math.round(snap.tracker.loadMs)} ms`}
             </Row>
             <Row label="Video">

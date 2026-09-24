@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import type { KeyAction } from '@/config/keybindings';
-import { TUNING } from '@/config/tuning';
+import { FEATURE_FLAGS, TUNING } from '@/config/tuning';
 import { CameraManager } from '@/core/camera';
 import {
   FixturePlaybackSource,
@@ -36,17 +36,36 @@ import { ViewportMapper } from '@/spatial/ViewportMapper';
 import { useAppStore, type AppState } from '@/state/appStore';
 import { createLogger } from '@/utils/logger';
 import { HandNormalizer } from '@/vision/handPipeline';
-import { HandTracker } from '@/vision/HandTracker';
+import { HandTracker, type TrackerBackend } from '@/vision/HandTracker';
 import type { SmoothingMode } from '@/vision/smoothing';
+import { visionWorkerSupported, WorkerTracker } from '@/vision/workerTracker';
 import { counters } from './debug';
 
 const log = createLogger('core');
 const SIDES: readonly HandSide[] = ['right', 'left'];
 
+/** The live input: the tracker source the render loop polls (worker proxy or main-thread). */
+type LiveSource = InputSource & { setRate(hz: number): void };
+
+/** Vite bundles this worker; `new Worker(new URL(…, import.meta.url))` must stay literal. */
+function createVisionWorker(): Worker {
+  return new Worker(new URL('../workers/visionWorker.ts', import.meta.url), {
+    type: 'module',
+    name: 'gs-vision',
+  });
+}
+
+/** Worker by default; `?vision=main` in the URL forces the main-thread tracker (A/B, debugging). */
+function preferVisionWorker(): boolean {
+  const forcedMain =
+    typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).get('vision') === 'main';
+  return FEATURE_FLAGS.visionWorker && !forcedMain && visionWorkerSupported();
+}
+
 export class Core {
   readonly camera = new CameraManager();
   readonly viewport = new ViewportMapper();
-  readonly tracker = new HandTracker();
   readonly normalizer = new HandNormalizer();
   readonly gestureEngine = new GestureEngine();
   readonly recorder = new FixtureRecorder();
@@ -72,7 +91,10 @@ export class Core {
     right: new CursorMarker('right'),
   };
   private readonly interaction: InteractionFrame;
-  private readonly live: LiveTrackerSource;
+  private trackerBackend: TrackerBackend;
+  private live: LiveSource;
+  private unsubscribeTracker: () => void = () => {};
+  private fellBackToMain = false;
   private input: InputSource;
   private playback: FixturePlaybackSource | null = null;
 
@@ -101,7 +123,9 @@ export class Core {
 
     this.coords = new CoordinateMapper(this.viewport, this.sceneManager.camera, this.sceneManager);
     this.cursors = new RaycastCursor(this.coords);
-    this.live = new LiveTrackerSource(this.tracker, this.camera.video, this.inferenceStats);
+    const t = this.makeTracker(preferVisionWorker());
+    this.trackerBackend = t.tracker;
+    this.live = t.live;
     this.input = this.live;
     this.applySettings(store.settings);
 
@@ -135,13 +159,18 @@ export class Core {
     this.loop = new RenderLoop(this.frame);
     this.unsubscribers.push(
       this.camera.onChange(this.onCameraChange),
-      this.tracker.onChange(this.onTrackerChange),
       this.modes.onHistoryChange((h) => useAppStore.getState().setHistory(h.canUndo, h.canRedo)),
       useAppStore.subscribe(this.onStoreChange),
     );
+    this.unsubscribeTracker = this.trackerBackend.onChange(this.onTrackerChange);
     this.switchMode(store.activeMode);
     counters.coreCreated++;
     log.debug('core created');
+  }
+
+  /** The hand tracker (worker proxy by default, main-thread fallback). */
+  get tracker(): TrackerBackend {
+    return this.trackerBackend;
   }
 
   /** Latest perception output (reused object). */
@@ -189,12 +218,13 @@ export class Core {
     this.unmount();
     this.stopLoop();
     for (const off of this.unsubscribers) off();
+    this.unsubscribeTracker();
     this.modes.dispose();
     this.markers.left.dispose();
     this.markers.right.dispose();
     this.live.dispose();
     this.playback?.dispose();
-    this.tracker.dispose();
+    this.trackerBackend.dispose();
     this.camera.dispose();
     this.background.dispose();
     this.videoTexture.dispose();
@@ -205,7 +235,7 @@ export class Core {
   }
 
   retryTracker(): void {
-    void this.tracker.load();
+    void this.trackerBackend.load();
   }
 
   /** Debug switch: raw vs smoothed vs smoothed + predicted hand visuals. */
@@ -274,6 +304,35 @@ export class Core {
   }
 
   // -------------------------------------------------------------------------------------------
+
+  private makeTracker(useWorker: boolean): { tracker: TrackerBackend; live: LiveSource } {
+    if (useWorker) {
+      const wt = new WorkerTracker(createVisionWorker(), this.camera.video, this.inferenceStats);
+      counters.visionWorkers++;
+      log.info('hand tracking runs in a Web Worker');
+      return { tracker: wt, live: wt };
+    }
+    const ht = new HandTracker();
+    log.info('hand tracking runs on the main thread');
+    return { tracker: ht, live: new LiveTrackerSource(ht, this.camera.video, this.inferenceStats) };
+  }
+
+  /** The worker could not start (old browser, blocked, crashed): carry on on the main thread. */
+  private fallBackToMainThread(reason: string | null): void {
+    log.warn('vision worker failed, falling back to the main thread:', reason);
+    this.fellBackToMain = true;
+    const wasLive = this.input === this.live;
+    this.unsubscribeTracker();
+    this.live.dispose();
+    this.trackerBackend.dispose();
+    const t = this.makeTracker(false);
+    this.trackerBackend = t.tracker;
+    this.live = t.live;
+    this.live.setRate(this.settings.inferenceHz);
+    if (wasLive) this.input = this.live;
+    this.unsubscribeTracker = this.trackerBackend.onChange(this.onTrackerChange);
+    if (this.camera.running) void this.trackerBackend.load();
+  }
 
   private switchMode(id: ModeId): void {
     this.modes.switchTo(id);
@@ -411,6 +470,7 @@ export class Core {
   }
 
   private resetPerception(): void {
+    this.live.reset?.();
     this.normalizer.clear(performance.now());
     this.gestureEngine.reset();
     this.capture.releaseAll('lost');
@@ -471,12 +531,16 @@ export class Core {
     // "Camera stopped: everything paused" (§21.3) — unless a fixture is playing.
     this.updateLoop();
     // Load the tracker the first time the camera runs (loads exactly once).
-    if (streaming && this.tracker.status === 'idle') void this.tracker.load();
+    if (streaming && this.trackerBackend.status === 'idle') void this.trackerBackend.load();
 
     useAppStore.getState().setCamera(cam.state, cam.error);
   };
 
-  private readonly onTrackerChange = (t: HandTracker): void => {
+  private readonly onTrackerChange = (t: TrackerBackend): void => {
+    if (t.thread === 'worker' && t.status === 'error' && !this.fellBackToMain) {
+      this.fallBackToMainThread(t.error);
+      return;
+    }
     if (t.status === 'ready') counters.trackersCreated++;
     useAppStore.getState().setTracker(t.status, t.error, t.delegate);
   };

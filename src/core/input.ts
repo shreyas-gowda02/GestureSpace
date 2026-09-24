@@ -1,5 +1,6 @@
 // Input layer (§9): where raw hand detections come from.
-//   LiveTrackerSource     — the one HandTracker running on the live <video>
+//   WorkerTracker         — the HandTracker in a Web Worker (vision/workerTracker.ts, default)
+//   LiveTrackerSource     — the HandTracker on the main thread (fallback)
 //   FixturePlaybackSource — replays recorded JSON (tests, demos, debugging without a camera)
 //   FixtureRecorder       — dev tool that records live detections to downloadable JSON
 // Everything downstream (normalizer → smoothing → gestures → modes) is identical for both sources.
@@ -32,6 +33,8 @@ export interface InputSource {
   readonly kind: 'live' | 'fixture';
   /** Returns a NEW detection if one is due this frame, else null. Result may be reused next call. */
   poll(now: number): RawDetection | null;
+  /** Drop anything in flight / pending (camera stopped, input switched). */
+  reset?(): void;
   dispose(): void;
 }
 
@@ -48,6 +51,15 @@ function makeRawHand(): RawHand {
   };
 }
 
+/** Preallocated hands for one detection — one per hand the tracker may report. */
+export function makeHandPool(n: number = TUNING.tracker.numHands): RawHand[] {
+  return Array.from({ length: n }, makeRawHand);
+}
+
+export function makeDetection(): RawDetection {
+  return { timestamp: 0, videoWidth: 0, videoHeight: 0, hands: [] };
+}
+
 function copyPoints(dst: Vec3[], src: readonly { x: number; y: number; z: number }[]): void {
   for (let i = 0; i < LANDMARK_COUNT; i++) {
     const s = src[i];
@@ -59,36 +71,68 @@ function copyPoints(dst: Vec3[], src: readonly { x: number; y: number; z: number
   }
 }
 
-export class LiveTrackerSource implements InputSource {
-  readonly kind = 'live';
-  private readonly tracker: HandTracker;
-  private readonly video: HTMLVideoElement;
+/**
+ * Copy a MediaPipe result into a reused RawDetection. Keeps EVERY reported hand (up to the pool
+ * size = numHands) — the main-user lock needs all of them to pick the right person.
+ */
+export function fillDetection(
+  det: RawDetection,
+  pool: readonly RawHand[],
+  result: TrackerResult,
+  ts: number,
+  width: number,
+  height: number,
+): RawDetection {
+  det.timestamp = ts;
+  det.videoWidth = width;
+  det.videoHeight = height;
+  det.hands.length = 0;
+  const n = Math.min(result.landmarks.length, pool.length);
+  for (let i = 0; i < n; i++) {
+    const hand = pool[i];
+    const lms = result.landmarks[i];
+    if (!hand || !lms) continue;
+    const cat = result.handedness[i]?.[0];
+    hand.handedness = cat?.categoryName ?? '';
+    hand.score = cat?.score ?? 0;
+    copyPoints(hand.landmarks, lms);
+    const world = result.worldLandmarks[i];
+    if (world && hand.worldLandmarks) copyPoints(hand.worldLandmarks, world);
+    det.hands.push(hand);
+  }
+  return det;
+}
+
+/** The part of a <video> the gate needs (a structural type so tests can fake it). */
+export interface GateVideo {
+  readyState: number;
+  videoWidth: number;
+  currentTime: number;
+  requestVideoFrameCallback?: HTMLVideoElement['requestVideoFrameCallback'];
+  cancelVideoFrameCallback?: HTMLVideoElement['cancelVideoFrameCallback'];
+}
+
+/**
+ * Decides WHEN to run inference (§9): only on a genuinely new camera frame (never re-run a stale
+ * one), throttled to the inference rate, with strictly increasing timestamps (MediaPipe requires
+ * them). Shared by the main-thread and worker trackers. Counts camera frames that were skipped.
+ */
+export class FrameGate {
+  private readonly video: GateVideo;
   private readonly stats: InferenceStats;
   private intervalMs = 1000 / TUNING.tracker.defaultInferenceHz;
   private lastInferAt = -Infinity;
   private lastTimestamp = 0;
-
-  // New-frame detection: requestVideoFrameCallback where available, else currentTime.
   private newFrame = false;
   private lastVideoTime = -1;
   private presentedFrames = 0;
   private presentedAtLastInference = -1;
   private rvfcId = 0;
 
-  /** Reused every inference (no per-frame allocation). */
-  private readonly detection: RawDetection = {
-    timestamp: 0,
-    videoWidth: 0,
-    videoHeight: 0,
-    hands: [],
-  };
-  private readonly handPool: RawHand[] = [makeRawHand(), makeRawHand()];
-
-  constructor(tracker: HandTracker, video: HTMLVideoElement, stats: InferenceStats) {
-    this.tracker = tracker;
+  constructor(video: GateVideo, stats: InferenceStats) {
     this.video = video;
     this.stats = stats;
-    if ('requestVideoFrameCallback' in video) {
+    if (video.requestVideoFrameCallback) {
       this.rvfcId = video.requestVideoFrameCallback(this.onVideoFrame);
     }
   }
@@ -97,54 +141,33 @@ export class LiveTrackerSource implements InputSource {
     this.intervalMs = 1000 / hz;
   }
 
-  poll(now: number): RawDetection | null {
-    const v = this.video;
-    if (!this.tracker.ready || v.readyState < 2 || v.videoWidth === 0) return null;
-    if (now - this.lastInferAt < this.intervalMs * TUNING.tracker.throttleSlack) return null;
-    if (!this.consumeNewFrame()) return null; // never re-run inference on a stale frame
+  /** Is the video producing frames at all? */
+  get videoReady(): boolean {
+    return this.video.readyState >= 2 && this.video.videoWidth > 0;
+  }
 
-    // MediaPipe requires strictly increasing timestamps.
+  /**
+   * If a new frame is due, consume it and return its (strictly increasing) timestamp; else null.
+   * Only call when the tracker can actually take a frame.
+   */
+  take(now: number): number | null {
+    if (!this.videoReady) return null;
+    if (now - this.lastInferAt < this.intervalMs * TUNING.tracker.throttleSlack) return null;
+    if (!this.consumeNewFrame()) return null;
     const ts = now > this.lastTimestamp ? now : this.lastTimestamp + 1;
     this.lastTimestamp = ts;
     this.lastInferAt = now;
-
-    const t0 = performance.now();
-    const result = this.tracker.detect(v, ts);
-    this.stats.record(now, performance.now() - t0);
     if (this.presentedAtLastInference >= 0) {
       const skipped = this.presentedFrames - this.presentedAtLastInference - 1;
       if (skipped > 0) this.stats.skippedFrames += skipped;
     }
     this.presentedAtLastInference = this.presentedFrames;
-
-    return this.fill(result, ts, v.videoWidth, v.videoHeight);
+    return ts;
   }
 
   dispose(): void {
-    if (this.rvfcId) this.video.cancelVideoFrameCallback(this.rvfcId);
+    if (this.rvfcId) this.video.cancelVideoFrameCallback?.(this.rvfcId);
     this.rvfcId = 0;
-  }
-
-  private fill(result: TrackerResult, ts: number, w: number, h: number): RawDetection {
-    const det = this.detection;
-    det.timestamp = ts;
-    det.videoWidth = w;
-    det.videoHeight = h;
-    det.hands.length = 0;
-    const n = Math.min(result.landmarks.length, this.handPool.length);
-    for (let i = 0; i < n; i++) {
-      const hand = this.handPool[i];
-      const lms = result.landmarks[i];
-      if (!hand || !lms) continue;
-      const cat = result.handedness[i]?.[0];
-      hand.handedness = cat?.categoryName ?? '';
-      hand.score = cat?.score ?? 0;
-      copyPoints(hand.landmarks, lms);
-      const world = result.worldLandmarks[i];
-      if (world && hand.worldLandmarks) copyPoints(hand.worldLandmarks, world);
-      det.hands.push(hand);
-    }
-    return det;
   }
 
   private consumeNewFrame(): boolean {
@@ -162,8 +185,49 @@ export class LiveTrackerSource implements InputSource {
   private readonly onVideoFrame = (_now: number, meta: VideoFrameCallbackMetadata): void => {
     this.newFrame = true;
     this.presentedFrames = meta.presentedFrames;
-    this.rvfcId = this.video.requestVideoFrameCallback(this.onVideoFrame);
+    this.rvfcId = this.video.requestVideoFrameCallback?.(this.onVideoFrame) ?? 0;
   };
+}
+
+/**
+ * Main-thread tracker source: runs the HandLandmarker synchronously inside the render loop.
+ * Fallback when the vision worker is unavailable (see vision/workerTracker.ts).
+ */
+export class LiveTrackerSource implements InputSource {
+  readonly kind = 'live';
+  private readonly tracker: HandTracker;
+  private readonly video: HTMLVideoElement;
+  private readonly stats: InferenceStats;
+  private readonly gate: FrameGate;
+  /** Reused every inference (no per-frame allocation). */
+  private readonly detection = makeDetection();
+  private readonly handPool = makeHandPool();
+
+  constructor(tracker: HandTracker, video: HTMLVideoElement, stats: InferenceStats) {
+    this.tracker = tracker;
+    this.video = video;
+    this.stats = stats;
+    this.gate = new FrameGate(video, stats);
+  }
+
+  setRate(hz: number): void {
+    this.gate.setRate(hz);
+  }
+
+  poll(now: number): RawDetection | null {
+    if (!this.tracker.ready) return null;
+    const ts = this.gate.take(now);
+    if (ts === null) return null;
+    const v = this.video;
+    const t0 = performance.now();
+    const result = this.tracker.detect(v, ts);
+    this.stats.record(now, performance.now() - t0);
+    return fillDetection(this.detection, this.handPool, result, ts, v.videoWidth, v.videoHeight);
+  }
+
+  dispose(): void {
+    this.gate.dispose();
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

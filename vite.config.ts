@@ -9,6 +9,8 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: { port: 5173, strictPort: true },
+  // The vision worker dynamically imports MediaPipe → needs code-splitting → ES module output.
+  worker: { format: 'es' },
   preview: { port: 4173, strictPort: true },
   // three.js alone is ~600 kB minified; chunk splitting is revisited in Phase 13 (performance).
   build: { target: 'es2022', sourcemap: true, chunkSizeWarningLimit: 1000 },

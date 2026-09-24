@@ -3,7 +3,7 @@
 
 import { FEATURE_FLAGS } from '@/config/tuning';
 import { MODE_IDS, type GesturePhase, type HandSide, type ModeId } from '@/core/types';
-import type { TrackerDelegate, TrackerStatus } from '@/vision/HandTracker';
+import type { TrackerDelegate, TrackerStatus, TrackerThread } from '@/vision/HandTracker';
 import { WRIST } from '@/vision/landmarks';
 import type { SmoothingMode } from '@/vision/smoothing';
 import type { Core } from './Core';
@@ -18,6 +18,7 @@ export interface DebugCounters {
   cameraStreamsStarted: number;
   cameraStreamsActive: number;
   trackersCreated: number;
+  visionWorkers: number;
   modeSwitches: number;
 }
 
@@ -30,6 +31,7 @@ export const counters: DebugCounters = {
   cameraStreamsStarted: 0,
   cameraStreamsActive: 0,
   trackersCreated: 0,
+  visionWorkers: 0,
   modeSwitches: 0,
 };
 
@@ -59,6 +61,7 @@ export interface DebugSnapshot {
     delegate: TrackerDelegate | null;
     loadMs: number;
     error: string | null;
+    thread: TrackerThread;
   };
   input: 'live' | 'fixture';
   playback: { name: string; progress: number } | null;
@@ -149,6 +152,7 @@ export function buildDebugSnapshot(core: Core): DebugSnapshot {
       delegate: core.tracker.delegate,
       loadMs: core.tracker.loadMs,
       error: core.tracker.error,
+      thread: core.tracker.thread,
     },
     input: core.inputKind,
     playback: core.playbackInfo,

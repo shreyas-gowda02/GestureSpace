@@ -80,7 +80,8 @@ src/
               landmarks.ts (P2: named indices, HAND_CONNECTIONS, palmScale, bounds)
               handPipeline.ts (P2/P3: HandNormalizer — gate, main-user lock, side stability,
               jump rejection, smoothing, grace period; HandSlot reuse)
-              smoothing.ts (P3: OneEuroFilter + LandmarkSmoother)
+              smoothing.ts (P3: OneEuroFilter + LandmarkSmoother, prediction)
+              workerTracker.ts (vision worker proxy + wire protocol; default tracker path)
   gestures/   GestureEngine.ts (P3: engine + precedence) · stateMachine.ts (P3)
               detectors.ts (P3: pinch, point, grab, openPalm, thumbPinky, swipe) · twoHand.ts (P3)
   spatial/    ViewportMapper.ts (P1: cover-crop + mirror) · CoordinateMapper.ts (P4: + raycast cursor,
@@ -104,6 +105,7 @@ src/
               PermissionScreen.tsx (P1) · DebugPanel.tsx (P2) · GestureStatus (P3, in AppShell)
               overlays.tsx (P12: Help, Settings, Onboarding) · toolPanels.tsx (per-mode controls)
   state/      appStore.ts (UI-only zustand) · persistence.ts (P12: settings, scenes, serializers)
+  workers/    visionWorker.ts (HandLandmarker off the main thread)
   utils/      math.ts (scalar + vector helpers) · logger.ts
 tests/        unit/ · integration/ · e2e/
               fixtures/syntheticHands.ts (pose + scenario generator) · fixtures/landmarks/*.json

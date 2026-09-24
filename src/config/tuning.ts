@@ -215,6 +215,11 @@ export const DEFAULT_SETTINGS: Settings = {
 
 // ---------- Feature flags (stretch goals + dev-only tools) ----------
 export const FEATURE_FLAGS = {
+  /**
+   * Run hand tracking in a Web Worker so inference never blocks rendering (auto-falls back to the
+   * main thread if unsupported or it fails; `?vision=main` forces the main thread).
+   */
+  visionWorker: true,
   /** Four-corner warp for texture surfaces (V1.1 stretch goal). */
   fourCornerWarp: false,
   /** Swipe gesture for mode/tool switching. */
