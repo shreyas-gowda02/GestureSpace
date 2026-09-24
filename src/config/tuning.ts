@@ -1,6 +1,8 @@
 // ALL tunable numbers + feature flags live here (§2 rule 10). Never inline thresholds/timings elsewhere.
 // Final tuned values are documented in docs/GESTURES.md.
 
+import type { Settings } from '@/core/types';
+
 export const TUNING = {
   camera: {
     idealWidth: 1280,
@@ -139,7 +141,20 @@ export const TUNING = {
     DEPTH_HYSTERESIS: 0.03,
     DEPTH_DWELL_MS: 120,
     DEAD_ZONE: 0.04,
-    oneEuro: { minCutoff: 0.5, beta: 0.004, dCutoff: 1.0 },
+    /** Stronger than cursor smoothing. beta is per signal-unit/s (signal ≈ 0..1). */
+    oneEuro: { minCutoff: 0.6, beta: 3, dCutoff: 1.0 },
+  },
+
+  cursor: {
+    /** Scene z of the default interaction plane (camera looks down −Z from z = scene.cameraZ). */
+    planeZ: 0,
+    /** Cursor ring radius in world units (≈13 px at 720p with the default camera). */
+    ringRadius: 0.34,
+    ringWidth: 0.09,
+    dotRadius: 0.08,
+    /** Ring scale while pinching (feels like "grabbing"). */
+    pinchScale: 0.65,
+    hoverColor: '#ffffff',
   },
 
   voxel: {
@@ -151,6 +166,8 @@ export const TUNING = {
   },
 
   scene: {
+    hemiLight: { sky: 0xdff6ff, ground: 0x1a1030, intensity: 1.1 },
+    dirLight: { color: 0xffffff, intensity: 1.6, position: [4, 8, 10] as const },
     fov: 50,
     near: 0.1,
     far: 1000,
@@ -184,6 +201,17 @@ export const TUNING = {
 } as const;
 
 export type Tuning = typeof TUNING;
+
+/** Default user settings (§21.8); persisted/editable from Phase 12. */
+export const DEFAULT_SETTINGS: Settings = {
+  dominant: 'right',
+  mirror: TUNING.scene.mirror,
+  smoothing: TUNING.smoothing.defaultSlider,
+  showSkeleton: TUNING.overlay.showSkeleton,
+  inferenceHz: TUNING.tracker.defaultInferenceHz,
+  quality: 'medium',
+  depthLockDefault: true,
+};
 
 // ---------- Feature flags (stretch goals + dev-only tools) ----------
 export const FEATURE_FLAGS = {

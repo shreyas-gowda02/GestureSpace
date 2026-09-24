@@ -67,7 +67,9 @@ Files marked `(Pn)` are created in that phase; nothing exists before it is imple
 ```
 src/
   main.tsx
-  app/        App.tsx (root + keyboard shortcuts) · bootstrap.ts (core singletons)
+  app/        App.tsx (root + keyboard shortcuts) · Core.ts (P4: the engine + per-frame pipeline)
+              bootstrap.ts (ref-counted Core holder + UI actions) · debug.ts (P4: counters,
+              debug snapshot, leak check)
   config/     tuning.ts (ALL thresholds + feature flags) · keybindings.ts
   core/       types.ts (shared types + §7 frame contracts)
               camera.ts (P1: CameraManager + permission/capability checks)
@@ -83,11 +85,12 @@ src/
               detectors.ts (P3: pinch, point, grab, openPalm, thumbPinky, swipe) · twoHand.ts (P3)
   spatial/    ViewportMapper.ts (P1: cover-crop + mirror) · CoordinateMapper.ts (P4: + raycast cursor,
               interaction plane) · DepthEstimator.ts (P4) · CaptureManager.ts (P4)
-  scene/      SceneManager.ts (P1: renderer, camera, lighting, dispose helpers)
-              CameraBackground.ts (P1) · overlay.ts (P2: OverlayCanvas2D + hand skeleton)
-              materials.ts (P4: shared materials + selection highlight)
-  modes/      registry.ts · types.ts (P4: SpatialMode, ModeContext) · ModeController.ts (P4)
-    shared/   history.ts (P5: CommandHistory) · TwoHandTransform.ts (P6)
+  scene/      SceneManager.ts (P1: renderer, camera, dispose helpers)
+              CameraBackground.ts (P1) · overlay.ts (P2/P3: OverlayCanvas2D, skeleton, gesture HUD)
+              materials.ts (P4: lighting, CursorMarker, highlight; P11 selection outline)
+  modes/      registry.ts (meta + factories) · types.ts (P4: SpatialMode, ModeContext)
+              ModeController.ts (P4) · PlaceholderMode.ts (P4, temporary until P11)
+    shared/   history.ts (P4: CommandHistory) · TwoHandTransform.ts (P6)
               TextureSurface.ts (P7: surface + TextureSources) · glsl.ts (P1: coverUv, mirror, hsv)
     voxel/    VoxelMode.ts · VoxelGrid.ts (grid + commands) · VoxelRenderer.ts (instancing, ghost,
               build-plane grid) · voxelMath.ts (DDA line, face extrusion, layer stepping)   (P5)

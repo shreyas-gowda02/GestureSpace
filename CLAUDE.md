@@ -37,8 +37,8 @@ gesture engine and ONE renderer. Everything runs locally; no backend, no uploads
 | 1     | Camera (permission flow, mirrored cover-crop background)             | ✅ done — **awaiting user's real-webcam confirmation**                    | `80f5c7f`            |
 | 2     | Hand tracker                                                         | ✅ done — handedness fixed after user's real-hand test; awaiting re-check | `phase-2` commits    |
 | 3     | Smoothing + gestures + main-user lock (**M0** demo)                  | ✅ done — awaiting user's real-hand check                                 | `phase-3` commit     |
-| 4     | Spatial cursor + ModeController                                      | ⏭ **next**                                                                | —                    |
-| 5     | Voxel Builder (**M1** demo)                                          | ⬜                                                                        | —                    |
+| 4     | Spatial cursor + ModeController                                      | ✅ done — awaiting user's real-hand check                                 | `phase-4` commit     |
+| 5     | Voxel Builder (**M1** demo)                                          | ⏭ **next**                                                                | —                    |
 | 6     | Two-hand transform core                                              | ⬜                                                                        | —                    |
 | 7     | Spatial Panel + Texture Surface                                      | ⬜                                                                        | —                    |
 | 8     | Air Draw                                                             | ⬜                                                                        | —                    |
@@ -65,11 +65,16 @@ D30; Debug panel Off / Smooth / Smooth + predict switch), confidence gate, jump 
 thumb-pinky (+ swipe, off) with hysteresis + debounce, two-hand pinch (scale / rotation /
 translation vs baseline), pinch ring + two-hand line/centre/×scale·angle overlay, status bar
 "Right: pinch · Left: open · Two-hand ✓", Debug panel gesture chips + main-user stats.
-96 tests passing (incl. a jitter/lag budget test).
+**Phase 4:** per-hand **3D cursor** (index fingertip → raycast → hit on objects or the interaction
+plane; ring marker turns white over objects, shrinks while pinching), depth estimator (palm scale +
+fingertip poke, relative, quantised steps), CaptureManager (release goes to the captor; lost hand /
+mode switch / open UI overlay drop captures), **ModeController** (clean switch contract, per-mode
+state + undo history preserved), 7 **placeholder experiences** (a shape per mode you can pinch-drag),
+working Undo/Redo/Clear/Reset buttons + keys, mode status line, Debug panel depth / cursor /
+captures / renderer stats + **Leak check** (10× all modes → GPU memory flat). 116 tests passing.
 
-**What does not work yet:** gestures don't DO anything yet (no 3D cursor / modes), no experiences (dock only switches the
-label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings buttons only toggle state
-(panels not built).
+**What does not work yet:** the seven real experiences (placeholders only — Voxel Builder is next),
+Help/Settings panels (buttons only toggle state; settings live in the store with defaults).
 
 **Pushed to GitHub:** yes — everything up to `ba40b4d` (lag fix) was pushed by the user on
 2026-09-24. Later commits: check with `git status` (the user pushes manually with `git push`).
@@ -82,12 +87,14 @@ label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings button
 2. `npm install` if `node_modules/` is missing (postinstall copies MediaPipe WASM into
    `public/mediapipe/wasm/`).
 3. Run the phase gate once to confirm a green baseline (see §5).
-4. Ask the user whether the lag fix (D30) feels right — they can A/B it live with the Debug panel
-   Smoothing switch. Then the pending real-camera checks: Phase 3 gestures (pinch, fist, point, open
+4. Ask the user about the Phase 4 real-hand check (3D cursor ring follows the fingertip; pinch the
+   placeholder shape and drag it; switch modes mid-drag; Leak check button). Earlier pending checks:
+   lag fix feel (D30) and Phase 3 gestures (pinch, fist, point, open
    palm, thumb-pinky, two-hand pinch), steadiness when still, and the main-user lock with a second
    person in view. Also ask for the Debug panel's inference Hz / ms. Tune thresholds in
    `config/tuning.ts` from their feedback if needed.
-5. Start **Phase 4 — Spatial cursor + ModeController** (§7 below). Stop after it and report.
+5. Start **Phase 5 — Voxel Builder** (§7 below): replace the `voxel` placeholder factory in
+   `modes/registry.ts` with the real mode. Stop after it and report.
 
 The user replies **"continue"** to approve moving to the next phase. Never start the next phase
 without that.
@@ -180,6 +187,13 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D28 | Precedence rule 2 → `singleHandPinchAllowed()` + `cancelFirstHand`. Rule 1 (UI consumes gestures) and rules 3–4 (release to capturer, no capture survives a mode switch) are implemented with CaptureManager/ModeController in Phase 4                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Need those systems first                                                                                      |
 | D29 | Synthetic hand generator is TypeScript: `tests/fixtures/syntheticHands.ts` (poses open/fist/point/pinch/thumbPinky + scenarios wave/pinch/tour/two-hand stretch/crowd); `node scripts/make-fixtures.ts` (Node 24 runs TS) regenerates the committed wave JSON. Replaced the old `.mjs` script                                                                                                                                                                                                                                                                                                                                                                                                    | One generator for tests, demos and the browser pane                                                           |
 | D30 | **Lag fix (user compared Phase 2 vs 3 on 2026-09-24: smoother but visibly laggier).** Measured with a jitter/lag simulation + a permanent test (`smoothing latency budget` in `tests/unit/vision.test.ts`). Now: visual beta 40 / dCutoff 2, trigger beta 40 / dCutoff 2, default slider 0.78 (≈0.9 Hz) **+ velocity prediction**: `tick()` extrapolates the smoothed landmarks to render time (≤ 50 ms, velocity low-pass 5 Hz). Real pipeline: jitter 0.70 px (raw 1.41), lag 5.6 ms (raw 8.7, old Phase 3 ≈ 27), fast-wave trailing 11.6 px (old ≈ 27). Cost: ~5 px overshoot on abrupt stops. Debug panel has an Off / Smooth / Smooth + predict switch (`SmoothingMode`, default `predict`) | User feedback; keeps smoothness, removes lag, 60 Hz visual updates                                            |
+| D31 | `app/bootstrap.ts` split (was 537 lines): `app/Core.ts` (engine + per-frame pipeline), `app/debug.ts` (counters, `DebugSnapshot`, `buildDebugSnapshot`, `runLeakCheck`), `app/bootstrap.ts` (ref-counted holder + UI actions + re-exports)                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ~400-line split rule (D3)                                                                                     |
+| D32 | `modes/shared/history.ts` (`CommandHistory`, cap 200, execute/push/undo/redo/onChange) created in Phase 4, not 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `ModeContext.history` needs it; Undo/Redo buttons wired now                                                   |
+| D33 | `modes/PlaceholderMode.ts`: each unbuilt experience is a spinning shape you can hover + pinch-drag (tests cursor, captures, lifecycle). Registry `MODE_FACTORIES` uses it until each phase swaps in the real mode; delete the file after Phase 11                                                                                                                                                                                                                                                                                                                                                                                                                                                | Spec §26 'placeholder modes'; gives the user something to test                                                |
+| D34 | `SpatialMode` extensions: optional `resetView()`, `onKey(action)`, `drawOverlay(ctx2d)`; `ModeMeta.phase`. `ModeContext.settings` is one live object updated in place                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Keys/Reset/2D drawing need a home                                                                             |
+| D35 | `Settings` type in `core/types.ts`; `DEFAULT_SETTINGS` in `config/tuning.ts`; `settings` + `updateSettings` in the zustand store; Core applies mirror / smoothing / inference rate / dominant / skeleton on change. Persistence + panel in Phase 12                                                                                                                                                                                                                                                                                                                                                                                                                                              | Modes and Core need settings before the panel exists                                                          |
+| D36 | Depth signal is relative to a baseline captured when the hand appears (`DepthEstimator.resetBaseline()` exists); modes use deltas from pinch start for push/pull. Depth One Euro minCutoff 0.6 / beta 3 (spec's beta assumed other units)                                                                                                                                                                                                                                                                                                                                                                                                                                                        | §13.4 relative use                                                                                            |
+| D37 | Precedence rules implemented: rule 1 via `ModeController.setUiCaptured` (help/settings open → no mode updates, captures dropped); rule 3 via `CaptureManager` callbacks; rule 4 via `releaseAll('modeSwitch')`. Lost hand → `release(side, 'lost')`; identity lock also while `capture.count > 0`                                                                                                                                                                                                                                                                                                                                                                                                | §11                                                                                                           |
 
 ---
 
@@ -214,16 +228,9 @@ Built — see §9. Includes the main-user lock (D23). Original plan kept below f
 - First recorded fixtures + integration tests replaying them.
 - **Accept:** stationary hand overlay visibly stable; pinch never flickers; status accurate.
 
-### Phase 4 — Spatial cursor
+### Phase 4 — Spatial cursor + ModeController ✅ DONE
 
-- `spatial/CoordinateMapper.ts` (view↔screen↔NDC↔scene + raycast cursor + interaction plane),
-  `spatial/DepthEstimator.ts` (§13.4: `W_PALM·(palmScale/baseline−1) + W_MPZ·normalizedMpZ`, One
-  Euro, quantise with hysteresis + dwell), `spatial/CaptureManager.ts`, `scene/materials.ts` +
-  lighting, 3D cursor per hand.
-- `modes/types.ts` (`SpatialMode`, `ModeContext`), `modes/ModeController.ts` (exit() releases all
-  captures before next enter(); per-mode state preserved), registry factories, placeholder modes.
-- **Accept:** 3D cursor tracks fingertip stably; switching modes leaks nothing
-  (`renderer.info.memory` back to baseline).
+Built — see §9 and D31–D37. Leak check (10× all modes) verified flat in the browser pane.
 
 ### Phase 5 — Voxel Builder (M1: "I can build 3D structures in the air") — spec §13
 
@@ -363,12 +370,34 @@ blob:; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'` �
 
 ## 9. Key implementation facts (things already built — reuse, don't rewrite)
 
-- `src/app/bootstrap.ts` — `Core` class = composition root (CameraManager, ViewportMapper,
-  SceneManager, shared `THREE.VideoTexture`, CameraBackground, RenderLoop, FpsMeter).
-  `createRefCounted()` holder makes it StrictMode-safe (dispose deferred one microtask).
-  `acquireCore/releaseCore/getCore`, UI actions `startCamera/stopCamera/reportCoreFailure`. The
-  `Stage` component in `ui/AppShell.tsx` acquires the core and calls `core.mount(el)`. New core
-  systems (tracker, gesture engine, mode controller) get added to `Core` and ticked in `Core.frame`.
+- `src/app/Core.ts` — `Core` = the engine: camera, viewport, tracker, normalizer, gestureEngine,
+  depth (per side), capture, coords, cursors (RaycastCursor), CursorMarkers, ModeController
+  (`core.modes`), live `settings`, the reused `InteractionFrame`, and the per-frame pipeline
+  `frame(now, dt)`: poll → process/tick → gestures → depth (→ `g.depthSignal`) → cursors → lost-hand
+  capture release → identity lock → `modes.update` → `renderFrame` (mode passes, markers, WebGL,
+  overlay skeleton + indicators + `modes.drawOverlay`) → FPS → status. Subscribes to the store
+  (activeMode → switch, settings → apply, help/settings open → UI capture). Public actions: `undo`,
+  `redo`, `clearMode`, `resetView`, `handleKey`, `playFixture`, `stopPlayback`, `setSmoothingMode`.
+- `src/app/bootstrap.ts` — `createRefCounted()` holder (StrictMode-safe), `acquireCore/releaseCore/
+getCore`, UI actions (`startCamera`, `stopCamera`, `retryTracker`, `undo`, `redo`, `clearMode`,
+  `resetView`, `handleKeyAction`, `debugSnapshot`, `leakCheck`, `reportCoreFailure`). The `Stage`
+  component in `ui/AppShell.tsx` acquires the core and calls `core.mount(el)`.
+- `src/app/debug.ts` — `counters` (+ `modeSwitches`), `DebugSnapshot`, `buildDebugSnapshot(core)`,
+  `runLeakCheck(core, cycles)`.
+- `src/spatial/CoordinateMapper.ts` — `CoordinateMapper` (view↔screen↔NDC, `worldToScreen`,
+  `rayThrough`, `ndcToPlane`), `InteractionPlane` (`setZ`, `setThrough` camera-facing),
+  `RaycastCursor` (`addTarget/removeTarget/clearTargets`; targets carry `userData.gsId` and optional
+  `gsKind: 'voxel'`; hit = first visible target else the plane; world face normal).
+- `src/spatial/DepthEstimator.ts` — `StepQuantizer` (dead zone + hysteresis + dwell), `DepthEstimator`
+  (`signal`, `steps`, `resetBaseline`). `src/spatial/CaptureManager.ts` — keys `left|right|twoHand`,
+  `capture/get/isCaptured/release/releaseTarget/releaseAll/describe`, reasons released | lost |
+  modeSwitch | ui | cancelled.
+- `src/modes/types.ts` (`ModeContext`, `SpatialMode`, `ModeFactory`), `src/modes/ModeController.ts`
+  (`switchTo`, `update`, `render`, `drawOverlay`, `setUiCaptured`, `undo/redo/clear/resetView/
+handleKey`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_META` incl. `phase`,
+  `MODE_FACTORIES`), `src/modes/PlaceholderMode.ts`, `src/modes/shared/history.ts`.
+- `src/scene/materials.ts` — `addDefaultLighting` (used by SceneManager), `CursorMarker`,
+  `setHighlight` (emissive glow).
 - `src/core/camera.ts` — `CameraManager` (state machine idle/requesting/running/stopped/error,
   `classifyCameraError`, `checkCameraSupport`, superseded-request guard, track `ended` handling).
 - `src/spatial/ViewportMapper.ts` — cover-crop + mirror. `viewToScreen`, `screenToView`,
@@ -469,3 +498,12 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   switch for live A/B. Note: the browser pane is often **hidden** (rAF = 0) — drive frames manually
   with `core['frame'](now)` there. **Next:** user re-tests feel (Debug panel → Smoothing switch),
   then Phase 4.
+- **2026-09-24 — Session 1 (cont.).** User pushed everything; asked why no commit-message prompt
+  (answer: Claude commits, `git push` only uploads) — user wants Claude to **keep committing**.
+  Phase 4 built: split Core/debug/bootstrap (D31), CoordinateMapper + InteractionPlane +
+  RaycastCursor, DepthEstimator + StepQuantizer, CaptureManager, CommandHistory, ModeController,
+  PlaceholderMode for all 7 experiences, cursor markers + lighting, store settings, wired status-bar
+  buttons + keys, Debug panel additions + leak check. Verified in the browser pane by stepping
+  `core['frame']`: leak check 10× flat (14 geo / 1 tex), scripted pinch-drag captures + moves +
+  releases the shape, mode switch mid-drag releases cleanly. The dev server had stopped — restart
+  with `preview_start` name `dev`. **Next:** user's Phase 4 hand check, then Phase 5 (Voxel).

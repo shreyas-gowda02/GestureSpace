@@ -265,6 +265,11 @@ kbd {
   flex-wrap: wrap;
 }
 
+.gs-debug__ok {
+  color: var(--gs-lime);
+  font-family: var(--gs-mono);
+}
+
 .gs-debug__error {
   margin: 6px 0 0;
   color: var(--gs-red);
@@ -705,6 +710,10 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.gs-statusbar__mode {
+  color: var(--gs-text-muted);
 }
 
 .gs-statusbar__actions {

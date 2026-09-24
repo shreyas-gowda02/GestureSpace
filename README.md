@@ -20,7 +20,7 @@
 ## Status
 
 🚧 Under construction — built phase by phase (see `GestureSpace_Build_Prompt.md` §26).
-Current: **Phase 3 — Smoothing + gestures** (steady, low-lag hands with prediction; pinch/grab/point/open/thumb-pinky; two-hand pinch; main-user lock).
+Current: **Phase 4 — Spatial cursor + mode system** (3D fingertip cursor, grab-and-drag placeholder shapes in every experience, clean mode switching). Next: Voxel Builder.
 
 ## Quick start
 

@@ -45,3 +45,18 @@ test('hand tracker loads once and the debug panel reports it', async ({ page }) 
   await expect(page.getByLabel('Debug panel')).toContainText(/ready · (GPU|CPU)/);
   expect(await page.evaluate(() => window.__gs_debug?.trackersCreated)).toBe(1);
 });
+
+test('switching through all seven experiences never duplicates the core or renderer', async ({
+  page,
+}) => {
+  await page.goto('/');
+  for (const key of ['1', '2', '3', '4', '5', '6', '7', '1']) await page.keyboard.press(key);
+  await expect(page.getByRole('button', { name: /Voxel Builder/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  const counters = await page.evaluate(() => window.__gs_debug);
+  expect(counters?.coreCreated).toBe(1);
+  expect(counters?.renderersCreated).toBe(1);
+  expect(counters?.modeSwitches).toBeGreaterThanOrEqual(8);
+});

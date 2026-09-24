@@ -20,6 +20,18 @@ export type ModeId = (typeof MODE_IDS)[number];
 export type QualityPreset = 'low' | 'medium' | 'high';
 export type InferenceRate = 15 | 30 | 60;
 
+/** User settings (§21.8). Edited in the Settings panel (Phase 12); defaults in config/tuning.ts. */
+export interface Settings {
+  dominant: HandSide;
+  mirror: boolean;
+  /** 0..1 visual smoothing slider (0 = most responsive). */
+  smoothing: number;
+  showSkeleton: boolean;
+  inferenceHz: InferenceRate;
+  quality: QualityPreset;
+  depthLockDefault: boolean;
+}
+
 /** Undoable edit. Every scene mutation in an editing mode goes through one. */
 export interface Command {
   label: string;

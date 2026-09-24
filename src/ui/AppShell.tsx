@@ -2,7 +2,16 @@
 // top bar · mode dock · per-mode tool panel · status bar.
 
 import { useEffect, useRef } from 'react';
-import { acquireCore, releaseCore, reportCoreFailure, stopCamera } from '@/app/bootstrap';
+import {
+  acquireCore,
+  clearMode,
+  redo,
+  releaseCore,
+  reportCoreFailure,
+  resetView,
+  stopCamera,
+  undo,
+} from '@/app/bootstrap';
 import { MODE_META } from '@/modes/registry';
 import { useAppStore, type CameraStatus } from '@/state/appStore';
 import { DebugPanel } from './DebugPanel';
@@ -99,7 +108,10 @@ function ToolPanel() {
       {open && (
         <div className="gs-toolpanel__body">
           <h2 className="gs-toolpanel__heading">{meta.name}</h2>
-          <p className="gs-muted">Tools for this experience appear here.</p>
+          <p className="gs-muted">
+            Preview: a placeholder shape you can pinch and drag. The full experience and its tools
+            arrive in Phase {meta.phase}.
+          </p>
           <h3 className="gs-toolpanel__sub">Gestures</h3>
           <ul className="gs-helplist">
             {meta.help.map((h) => (
@@ -116,11 +128,12 @@ function ToolPanel() {
 }
 
 /**
- * Bottom bar: gesture status + always-available recovery controls (§21.1, §21.10).
- * Undo/Redo/Clear/Reset are wired when the systems they drive land (history: Phase 5).
+ * Bottom bar: gesture status + the active experience's status + always-available recovery
+ * controls (§21.1, §21.10). Undo/Redo act on the active experience's own history.
  */
 function StatusBar() {
   const statusText = useAppStore((s) => s.statusText);
+  const modeStatus = useAppStore((s) => s.modeStatus);
   const canUndo = useAppStore((s) => s.canUndo);
   const canRedo = useAppStore((s) => s.canRedo);
   const cameraStatus = useAppStore((s) => s.cameraStatus);
@@ -130,18 +143,45 @@ function StatusBar() {
     <footer className="gs-panel gs-statusbar">
       <div className="gs-statusbar__text" role="status" aria-live="polite">
         <span className="gs-muted">Status:</span> {statusText}
+        {modeStatus && <span className="gs-statusbar__mode"> — {modeStatus}</span>}
       </div>
       <div className="gs-statusbar__actions">
-        <button type="button" className="gs-btn" disabled={!canUndo} aria-label="Undo">
+        <button
+          type="button"
+          className="gs-btn"
+          disabled={!canUndo}
+          aria-label="Undo"
+          title="Undo (Ctrl+Z)"
+          onClick={undo}
+        >
           Undo
         </button>
-        <button type="button" className="gs-btn" disabled={!canRedo} aria-label="Redo">
+        <button
+          type="button"
+          className="gs-btn"
+          disabled={!canRedo}
+          aria-label="Redo"
+          title="Redo (Ctrl+Shift+Z)"
+          onClick={redo}
+        >
           Redo
         </button>
-        <button type="button" className="gs-btn" aria-label="Clear current experience">
+        <button
+          type="button"
+          className="gs-btn"
+          aria-label="Clear current experience"
+          title="Clear (C)"
+          onClick={clearMode}
+        >
           Clear
         </button>
-        <button type="button" className="gs-btn" aria-label="Reset view">
+        <button
+          type="button"
+          className="gs-btn"
+          aria-label="Reset view"
+          title="Reset view (R)"
+          onClick={resetView}
+        >
           Reset
         </button>
         <button

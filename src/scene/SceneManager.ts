@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
+import { addDefaultLighting } from './materials';
 
 export class SceneManager {
   readonly renderer: THREE.WebGLRenderer;
@@ -28,6 +29,7 @@ export class SceneManager {
     this.camera = new THREE.PerspectiveCamera(fov, 1, near, far);
     this.camera.position.set(0, 0, cameraZ);
     this.camera.lookAt(0, 0, 0);
+    addDefaultLighting(this.scene);
   }
 
   get canvas(): HTMLCanvasElement {

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { handleKeyAction } from '@/app/bootstrap';
 import { resolveKeyAction } from '@/config/keybindings';
 import { useAppStore } from '@/state/appStore';
 import { AppShell } from '@/ui/AppShell';
@@ -14,8 +15,8 @@ function isTypingTarget(t: EventTarget | null): boolean {
 }
 
 /**
- * Global keyboard handler: key → action via config/keybindings.ts.
- * Mode-specific actions (depth, filters, …) are forwarded to the ModeController in Phase 4.
+ * Global keyboard handler: key → action via config/keybindings.ts. The shell handles mode / help /
+ * debug / escape; everything else goes to the core (undo, clear…) and the active experience.
  */
 function useKeyboardShortcuts(): void {
   useEffect(() => {
@@ -36,9 +37,11 @@ function useKeyboardShortcuts(): void {
           break;
         case 'escape':
           store.closeOverlays();
+          handleKeyAction(action); // also drops anything held
           break;
         default:
-          return; // not handled yet — let the browser keep the event
+          // Undo/redo/clear/reset + mode-specific keys go to the core / active experience.
+          if (!handleKeyAction(action)) return; // unused — let the browser keep the event
       }
       e.preventDefault();
     };

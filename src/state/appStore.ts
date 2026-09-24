@@ -2,7 +2,8 @@
 
 import { create } from 'zustand';
 import type { CameraError, CameraState } from '@/core/camera';
-import type { ModeId } from '@/core/types';
+import { DEFAULT_SETTINGS } from '@/config/tuning';
+import type { ModeId, Settings } from '@/core/types';
 import type { TrackerDelegate, TrackerStatus } from '@/vision/HandTracker';
 
 export type CameraStatus = CameraState;
@@ -18,6 +19,9 @@ export interface AppState {
   handCount: number;
   /** Throttled (≤10 Hz) status line, e.g. "Right: pinch · Left: —". */
   statusText: string;
+  /** Short message from the active experience (emitStatus), e.g. "Panel captured". */
+  modeStatus: string;
+  settings: Settings;
   fps: number;
   toolPanelOpen: boolean;
   helpOpen: boolean;
@@ -31,6 +35,9 @@ export interface AppState {
   setTracker(status: TrackerStatus, error: string | null, delegate: TrackerDelegate | null): void;
   setHandCount(count: number): void;
   setStatusText(text: string): void;
+  setModeStatus(text: string): void;
+  updateSettings(patch: Partial<Settings>): void;
+  setHistory(canUndo: boolean, canRedo: boolean): void;
   setFps(fps: number): void;
   toggleToolPanel(): void;
   toggleHelp(): void;
@@ -48,6 +55,8 @@ export const useAppStore = create<AppState>()((set) => ({
   trackerDelegate: null,
   handCount: 0,
   statusText: 'Right: — · Left: —',
+  modeStatus: '',
+  settings: DEFAULT_SETTINGS,
   fps: 0,
   toolPanelOpen: true,
   helpOpen: false,
@@ -62,6 +71,9 @@ export const useAppStore = create<AppState>()((set) => ({
     set({ trackerStatus, trackerError, trackerDelegate }),
   setHandCount: (handCount) => set({ handCount }),
   setStatusText: (statusText) => set({ statusText }),
+  setModeStatus: (modeStatus) => set({ modeStatus }),
+  updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+  setHistory: (canUndo, canRedo) => set({ canUndo, canRedo }),
   setFps: (fps) => set({ fps }),
   toggleToolPanel: () => set((s) => ({ toolPanelOpen: !s.toolPanelOpen })),
   toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen })),

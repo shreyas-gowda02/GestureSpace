@@ -1,471 +1,28 @@
-// Composition root: creates the core singletons exactly once (§2 rule 2) — one camera stream,
-// one renderer, one render loop, one hand tracker. Ref-counted and module-guarded so React
-// StrictMode's mount → unmount → mount cannot duplicate or churn them.
+// Composition root: holds the ONE Core (§2 rule 2) — ref-counted and module-guarded so React
+// StrictMode's mount → unmount → mount cannot duplicate or churn it — plus the UI actions React
+// calls. React never touches the camera, tracker, renderer or modes directly.
 
-import * as THREE from 'three';
-import { FEATURE_FLAGS, TUNING } from '@/config/tuning';
-import { CameraManager, type CameraError } from '@/core/camera';
-import {
-  FixturePlaybackSource,
-  FixtureRecorder,
-  LiveTrackerSource,
-  type InputSource,
-  type LandmarkFixture,
-} from '@/core/input';
-import { FpsMeter, InferenceStats, RenderLoop } from '@/core/renderLoop';
-import type { GestureFrame, GesturePhase, HandFrame, HandSide } from '@/core/types';
-import { describeHand, GestureEngine } from '@/gestures/GestureEngine';
-import { CameraBackground } from '@/scene/CameraBackground';
-import { drawGestureIndicators, drawHandSkeleton, OverlayCanvas2D } from '@/scene/overlay';
-import { SceneManager } from '@/scene/SceneManager';
-import { ViewportMapper } from '@/spatial/ViewportMapper';
+import type { KeyAction } from '@/config/keybindings';
+import type { CameraError } from '@/core/camera';
 import { useAppStore } from '@/state/appStore';
 import { createLogger } from '@/utils/logger';
-import { HandNormalizer } from '@/vision/handPipeline';
-import type { SmoothingMode } from '@/vision/smoothing';
-import { HandTracker, type TrackerDelegate, type TrackerStatus } from '@/vision/HandTracker';
-import { WRIST } from '@/vision/landmarks';
+import { Core } from './Core';
+import {
+  buildDebugSnapshot,
+  runLeakCheck,
+  type DebugSnapshot,
+  type LeakCheckResult,
+} from './debug';
+
+export { Core } from './Core';
+export {
+  getDebugCounters,
+  type DebugCounters,
+  type DebugSnapshot,
+  type LeakCheckResult,
+} from './debug';
 
 const log = createLogger('core');
-
-/** Dev/test-only counters read by E2E to prove nothing is ever duplicated. */
-export interface DebugCounters {
-  coreCreated: number;
-  coreDisposed: number;
-  renderersCreated: number;
-  renderLoopsStarted: number;
-  renderLoopsActive: number;
-  cameraStreamsStarted: number;
-  cameraStreamsActive: number;
-  trackersCreated: number;
-}
-
-const counters: DebugCounters = {
-  coreCreated: 0,
-  coreDisposed: 0,
-  renderersCreated: 0,
-  renderLoopsStarted: 0,
-  renderLoopsActive: 0,
-  cameraStreamsStarted: 0,
-  cameraStreamsActive: 0,
-  trackersCreated: 0,
-};
-
-declare global {
-  interface Window {
-    __gs_debug?: DebugCounters;
-  }
-}
-
-if (FEATURE_FLAGS.debugCounters && typeof window !== 'undefined') {
-  window.__gs_debug = counters;
-}
-
-export function getDebugCounters(): Readonly<DebugCounters> {
-  return counters;
-}
-
-/** Plain snapshot for the debug panel (polled at ~4 Hz, never per frame). */
-export interface DebugSnapshot {
-  renderFps: number;
-  inferenceFps: number;
-  inferenceMs: number;
-  inferenceCount: number;
-  skippedFrames: number;
-  tracker: {
-    status: TrackerStatus;
-    delegate: TrackerDelegate | null;
-    loadMs: number;
-    error: string | null;
-  };
-  input: 'live' | 'fixture';
-  playback: { name: string; progress: number } | null;
-  recording: boolean;
-  recordedFrames: number;
-  video: { width: number; height: number };
-  viewport: { width: number; height: number; dpr: number };
-  mirror: boolean;
-  /** Main-user lock at the last inference. */
-  userLock: { detected: number; gated: number; used: number; identityLocked: boolean };
-  smoothingHz: number;
-  smoothingMode: SmoothingMode;
-  hands: {
-    side: HandSide;
-    rawLabel: string;
-    score: number;
-    palmScale: number;
-    lostForMs: number;
-    wrist: { x: number; y: number };
-    gestures: { name: string; phase: GesturePhase; value: number }[];
-  }[];
-  twoHand: {
-    active: boolean;
-    scale: number;
-    rotationDeg: number;
-    distance: number;
-    cancelFirstHand: HandSide | null;
-  };
-}
-
-const GESTURE_NAMES = ['pinch', 'grab', 'point', 'openPalm', 'thumbPinky'] as const;
-
-// ---------------------------------------------------------------------------------------------
-// Core
-// ---------------------------------------------------------------------------------------------
-
-export class Core {
-  readonly camera = new CameraManager();
-  readonly viewport = new ViewportMapper();
-  readonly tracker = new HandTracker();
-  readonly normalizer = new HandNormalizer();
-  readonly gestureEngine = new GestureEngine();
-  readonly recorder = new FixtureRecorder();
-  readonly inferenceStats = new InferenceStats();
-  readonly sceneManager: SceneManager;
-  readonly overlay: OverlayCanvas2D;
-  readonly videoTexture: THREE.VideoTexture;
-  readonly background: CameraBackground;
-  readonly loop: RenderLoop;
-
-  private readonly live: LiveTrackerSource;
-  private input: InputSource;
-  private playback: FixturePlaybackSource | null = null;
-
-  private readonly fps = new FpsMeter();
-  private lastFpsPush = 0;
-  private lastStatusPush = 0;
-  private statusKey = '';
-  private wasStreaming = false;
-  private container: HTMLElement | null = null;
-  private resizeObserver: ResizeObserver | null = null;
-  private readonly unsubscribers: (() => void)[] = [];
-
-  constructor() {
-    this.sceneManager = new SceneManager();
-    counters.renderersCreated++;
-    this.overlay = new OverlayCanvas2D();
-    this.setLayersVisible(false); // idle screen shows the CSS backdrop
-
-    this.viewport.setMirror(TUNING.scene.mirror);
-    this.videoTexture = new THREE.VideoTexture(this.camera.video);
-    this.background = new CameraBackground(this.videoTexture);
-    this.sceneManager.scene.add(this.background.mesh);
-
-    this.live = new LiveTrackerSource(this.tracker, this.camera.video, this.inferenceStats);
-    this.input = this.live;
-
-    this.loop = new RenderLoop(this.frame);
-    this.unsubscribers.push(
-      this.camera.onChange(this.onCameraChange),
-      this.tracker.onChange(this.onTrackerChange),
-    );
-    counters.coreCreated++;
-    log.debug('core created');
-  }
-
-  /** Latest perception output (reused object; valid until the next inference). */
-  get hands(): HandFrame {
-    return this.normalizer.frame;
-  }
-
-  /** Latest gesture output (reused object, updated every render frame). */
-  get gestures(): GestureFrame {
-    return this.gestureEngine.frame;
-  }
-
-  get playbackActive(): boolean {
-    return this.playback !== null;
-  }
-
-  /** Attach canvases + hidden video to the stage element (idempotent). */
-  mount(container: HTMLElement): void {
-    if (this.container === container) return;
-    this.unmount();
-    this.container = container;
-    container.append(this.sceneManager.canvas, this.overlay.canvas, this.camera.video);
-    this.resizeObserver = new ResizeObserver(() => this.syncSize());
-    this.resizeObserver.observe(container);
-    this.syncSize();
-  }
-
-  unmount(): void {
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-    this.container = null;
-  }
-
-  dispose(): void {
-    this.unmount();
-    this.stopLoop();
-    for (const off of this.unsubscribers) off();
-    this.live.dispose();
-    this.playback?.dispose();
-    this.tracker.dispose();
-    this.camera.dispose();
-    this.background.dispose();
-    this.videoTexture.dispose();
-    this.overlay.dispose();
-    this.sceneManager.dispose();
-    counters.coreDisposed++;
-    log.debug('core disposed');
-  }
-
-  retryTracker(): void {
-    void this.tracker.load();
-  }
-
-  /** Debug switch: raw vs smoothed vs smoothed + predicted hand visuals. */
-  setSmoothingMode(mode: SmoothingMode): void {
-    this.normalizer.setSmoothingMode(mode);
-  }
-
-  /** Replay recorded landmarks through the full pipeline (works with or without a camera). */
-  playFixture(fixture: LandmarkFixture): void {
-    this.playback?.dispose();
-    this.playback = new FixturePlaybackSource(fixture, performance.now());
-    this.input = this.playback;
-    this.resetPerception();
-    this.updateLoop();
-    log.info(`playing fixture "${fixture.name}" (${fixture.frames.length} frames)`);
-  }
-
-  stopPlayback(): void {
-    if (!this.playback) return;
-    this.playback.dispose();
-    this.playback = null;
-    this.input = this.live;
-    this.resetPerception();
-    this.updateLoop();
-  }
-
-  debugSnapshot(): DebugSnapshot {
-    const hands: DebugSnapshot['hands'] = [];
-    for (const side of ['right', 'left'] as const) {
-      const h = this.hands[side];
-      if (!h) continue;
-      const slot = this.normalizer.slots[side];
-      const w = h.landmarks[WRIST];
-      const g = this.gestures[side];
-      hands.push({
-        side,
-        rawLabel: slot.rawLabel,
-        score: h.score,
-        palmScale: h.palmScale,
-        lostForMs: h.lostForMs,
-        wrist: { x: w?.x ?? 0, y: w?.y ?? 0 },
-        gestures: g
-          ? GESTURE_NAMES.map((name) => ({
-              name,
-              phase: g[name].phase,
-              value: g[name].value,
-            }))
-          : [],
-      });
-    }
-    const two = this.gestures.twoHand;
-    const n = this.normalizer;
-    const s = this.inferenceStats;
-    return {
-      renderFps: this.fps.fps,
-      inferenceFps: s.fps,
-      inferenceMs: s.avgMs,
-      inferenceCount: s.count,
-      skippedFrames: s.skippedFrames,
-      tracker: {
-        status: this.tracker.status,
-        delegate: this.tracker.delegate,
-        loadMs: this.tracker.loadMs,
-        error: this.tracker.error,
-      },
-      input: this.input.kind,
-      playback: this.playback
-        ? { name: this.playback.fixture.name, progress: this.playback.progress }
-        : null,
-      recording: this.recorder.recording,
-      recordedFrames: this.recorder.frameCount,
-      video: { width: this.viewport.videoWidth, height: this.viewport.videoHeight },
-      viewport: {
-        width: this.sceneManager.width,
-        height: this.sceneManager.height,
-        dpr: this.sceneManager.renderer.getPixelRatio(),
-      },
-      mirror: this.viewport.mirror,
-      userLock: {
-        detected: n.detectedCount,
-        gated: n.gatedCount,
-        used: n.usedCount,
-        identityLocked: n.identityLocked,
-      },
-      smoothingHz: n.visualMinCutoff,
-      smoothingMode: n.smoothingMode,
-      hands,
-      twoHand: {
-        active: two.active,
-        scale: two.scale,
-        rotationDeg: (two.rotation * 180) / Math.PI,
-        distance: two.distance,
-        cancelFirstHand: two.cancelFirstHand,
-      },
-    };
-  }
-
-  // -------------------------------------------------------------------------------------------
-
-  private syncSize(): void {
-    const el = this.container;
-    if (!el) return;
-    const sm = this.sceneManager;
-    sm.setSize(el.clientWidth, el.clientHeight);
-    this.overlay.setSize(sm.width, sm.height, sm.renderer.getPixelRatio());
-    this.syncViewport();
-    if (this.loop.running) this.renderFrame(); // repaint immediately; avoids resize flicker
-  }
-
-  private syncViewport(): void {
-    const sm = this.sceneManager;
-    const live = this.camera.running;
-    const fx = this.playback?.fixture;
-    const vw = live ? this.camera.width : (fx?.videoWidth ?? 0);
-    const vh = live ? this.camera.height : (fx?.videoHeight ?? 0);
-    this.viewport.update(vw, vh, sm.width, sm.height);
-    this.background.sync(this.viewport, sm.drawingBuffer, live);
-  }
-
-  /** The ONE per-frame pipeline (§5 runtime loop). Stages are added phase by phase. */
-  private readonly frame = (now: number): void => {
-    this.syncViewport(); // cheap no-op unless the video or viewport size changed
-
-    // 1–2. Inference on a new video frame (throttled) → gated, main-user-locked, smoothed HandFrame.
-    const det = this.input.poll(now);
-    if (det) {
-      if (this.input === this.live) this.recorder.record(det);
-      this.normalizer.process(det, this.viewport.mirror, now);
-    } else {
-      this.normalizer.tick(now); // loss grace period runs every frame
-    }
-
-    // 3. Gestures (every frame, so justStarted/justEnded last exactly one frame).
-    this.gestureEngine.update(this.hands, this.viewport.videoAspect, now);
-    // While a gesture holds something, lock hand identities by proximity (§8 hands crossing).
-    this.normalizer.setIdentityLock(this.gestureEngine.capturing);
-
-    // 6. Render: camera background + 3D scene → 2D overlay.
-    this.renderFrame();
-
-    // 7. Perf + throttled UI status.
-    if (this.fps.tick(now) && now - this.lastFpsPush >= 1000 / TUNING.ui.statusHz) {
-      this.lastFpsPush = now;
-      useAppStore.getState().setFps(this.fps.fps);
-    }
-    this.pushStatus(now);
-  };
-
-  private renderFrame(): void {
-    this.sceneManager.render();
-    const ov = this.overlay;
-    ov.clear();
-    if (TUNING.overlay.showSkeleton) {
-      const { left, right } = this.hands;
-      if (left) drawHandSkeleton(ov.ctx, left, this.viewport);
-      if (right) drawHandSkeleton(ov.ctx, right, this.viewport);
-    }
-    drawGestureIndicators(
-      ov.ctx,
-      this.hands,
-      this.gestures,
-      this.gestureEngine.bothHandsVisible,
-      this.viewport,
-    );
-  }
-
-  /** Push hand/gesture status to the UI at ≤ statusHz, and only when it changes. */
-  private pushStatus(now: number): void {
-    if (now - this.lastStatusPush < 1000 / TUNING.ui.statusHz) return;
-    this.lastStatusPush = now;
-    const { left, right } = this.hands;
-    const g = this.gestures;
-    const two = g.twoHand.active ? ' · Two-hand ✓' : '';
-    const text = `Right: ${describeHand(right, g.right)} · Left: ${describeHand(left, g.left)}${two}`;
-    if (text === this.statusKey) return;
-    this.statusKey = text;
-    const store = useAppStore.getState();
-    const count = (left ? 1 : 0) + (right ? 1 : 0);
-    if (store.handCount !== count) store.setHandCount(count);
-    store.setStatusText(text);
-  }
-
-  private resetPerception(): void {
-    this.normalizer.clear(performance.now());
-    this.gestureEngine.reset();
-  }
-
-  private resetStatus(): void {
-    this.statusKey = '';
-    const store = useAppStore.getState();
-    store.setHandCount(0);
-    store.setStatusText('Right: — · Left: —');
-  }
-
-  private setLayersVisible(visible: boolean): void {
-    const v = visible ? 'visible' : 'hidden';
-    this.sceneManager.canvas.style.visibility = v;
-    this.overlay.canvas.style.visibility = v;
-  }
-
-  /** Run the loop while there is something to show: a live camera or fixture playback. */
-  private updateLoop(): void {
-    const wanted = this.camera.running || this.playback !== null;
-    if (wanted) {
-      if (this.loop.start()) {
-        counters.renderLoopsStarted++;
-        counters.renderLoopsActive++;
-      }
-    } else {
-      this.stopLoop();
-    }
-    this.setLayersVisible(wanted);
-    this.syncViewport();
-  }
-
-  private stopLoop(): void {
-    if (!this.loop.running) return;
-    this.loop.stop();
-    counters.renderLoopsActive--;
-    this.fps.reset();
-    this.inferenceStats.reset();
-    this.resetPerception();
-    this.overlay.clear();
-    this.resetStatus();
-    useAppStore.getState().setFps(0);
-  }
-
-  private readonly onCameraChange = (cam: CameraManager): void => {
-    const streaming = cam.state === 'running';
-    if (streaming && !this.wasStreaming) {
-      counters.cameraStreamsStarted++;
-      counters.cameraStreamsActive++;
-    } else if (!streaming && this.wasStreaming) {
-      counters.cameraStreamsActive--;
-    }
-    this.wasStreaming = streaming;
-
-    // "Camera stopped: everything paused" (§21.3) — unless a fixture is playing.
-    this.updateLoop();
-    // Load the tracker the first time the camera runs (loads exactly once).
-    if (streaming && this.tracker.status === 'idle') void this.tracker.load();
-
-    useAppStore.getState().setCamera(cam.state, cam.error);
-  };
-
-  private readonly onTrackerChange = (t: HandTracker): void => {
-    if (t.status === 'ready') counters.trackersCreated++;
-    useAppStore.getState().setTracker(t.status, t.error, t.delegate);
-  };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Ref-counted singleton
-// ---------------------------------------------------------------------------------------------
 
 export interface RefCounted<T> {
   acquire(): T;
@@ -509,13 +66,11 @@ export const releaseCore = (): void => coreHolder.release();
 export const getCore = (): Core | null => coreHolder.peek();
 
 // ---------------------------------------------------------------------------------------------
-// UI actions (React calls these; it never touches the camera/tracker/renderer directly)
+// UI actions
 // ---------------------------------------------------------------------------------------------
 
 export function startCamera(): void {
-  const core = getCore();
-  if (!core) return;
-  void core.camera.start();
+  void getCore()?.camera.start();
 }
 
 export function stopCamera(): void {
@@ -524,6 +79,37 @@ export function stopCamera(): void {
 
 export function retryTracker(): void {
   getCore()?.retryTracker();
+}
+
+export function undo(): void {
+  getCore()?.undo();
+}
+
+export function redo(): void {
+  getCore()?.redo();
+}
+
+export function clearMode(): void {
+  getCore()?.clearMode();
+}
+
+export function resetView(): void {
+  getCore()?.resetView();
+}
+
+/** Forward a keyboard action to the core / active mode. Returns true if it was used. */
+export function handleKeyAction(action: KeyAction): boolean {
+  return getCore()?.handleKey(action) ?? false;
+}
+
+export function debugSnapshot(): DebugSnapshot | null {
+  const core = getCore();
+  return core ? buildDebugSnapshot(core) : null;
+}
+
+export function leakCheck(cycles?: number): LeakCheckResult | null {
+  const core = getCore();
+  return core ? runLeakCheck(core, cycles) : null;
 }
 
 /** Surface a core creation failure (e.g. no WebGL2) through the normal camera error UI. */

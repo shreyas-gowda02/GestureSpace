@@ -1,6 +1,9 @@
-// ModeId → metadata (name, icon, help). Factories are registered here in Phase 4.
+// ModeId → metadata (name, icon, help) + factories. Each experience replaces its placeholder
+// factory in the phase that builds it (`phase` below).
 
 import { MODE_IDS, type ModeId } from '@/core/types';
+import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
+import type { ModeFactory } from './types';
 
 export interface ModeHelpItem {
   gesture: string;
@@ -14,6 +17,8 @@ export interface ModeMeta {
   /** 1-based keyboard shortcut. */
   hotkey: string;
   tagline: string;
+  /** Build phase that delivers the real experience. */
+  phase: number;
   help: readonly ModeHelpItem[];
 }
 
@@ -24,6 +29,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: 'Voxel',
     hotkey: '1',
     tagline: 'Build block structures in the air with pinch.',
+    phase: 5,
     help: [
       { gesture: 'Move index finger', action: 'Move X/Y cursor (ghost cube shows target)' },
       { gesture: 'Pinch', action: 'Place a voxel' },
@@ -42,6 +48,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: 'Panel',
     hotkey: '2',
     tagline: 'Hold a floating image between your hands.',
+    phase: 7,
     help: [
       { gesture: 'Pinch both handles', action: 'Capture the panel' },
       { gesture: 'Move hands together', action: 'Move' },
@@ -55,6 +62,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: 'Draw',
     hotkey: '3',
     tagline: 'Draw glowing strokes with your index finger.',
+    phase: 8,
     help: [
       { gesture: 'Pinch', action: 'Pen down' },
       { gesture: 'Release', action: 'Pen up' },
@@ -67,6 +75,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: 'Strings',
     hotkey: '4',
     tagline: 'Glowing particles and elastic threads on your hands.',
+    phase: 9,
     help: [{ gesture: 'Move your hands', action: 'Stretch the string network' }],
   },
   filter: {
@@ -75,6 +84,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: 'Filter',
     hotkey: '5',
     tagline: 'A magic lens that filters the world behind it.',
+    phase: 10,
     help: [
       { gesture: 'Two-hand pinch', action: 'Capture / move / stretch / rotate the lens' },
       { gesture: 'Thumb-pinky tap (dominant)', action: 'Next filter' },
@@ -87,6 +97,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: 'Portal',
     hotkey: '6',
     tagline: 'Open a window into another world.',
+    phase: 10,
     help: [{ gesture: 'Two-hand pinch', action: 'Open / move / stretch / rotate the portal' }],
   },
   objectLab: {
@@ -95,6 +106,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     shortName: '3D Lab',
     hotkey: '7',
     tagline: 'Spawn and manipulate 3D objects, Iron-Man style.',
+    phase: 11,
     help: [
       { gesture: 'Open palm (hold)', action: 'Spawn menu' },
       { gesture: 'Point + pinch', action: 'Select' },
@@ -105,3 +117,29 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
 };
 
 export const MODE_LIST: readonly ModeMeta[] = MODE_IDS.map((id) => MODE_META[id]);
+
+/** Placeholder look per experience until its real implementation lands. */
+const PLACEHOLDERS: Record<ModeId, { shape: PlaceholderShape; color: string }> = {
+  voxel: { shape: 'box', color: '#21d4d8' },
+  panel: { shape: 'panel', color: '#6c8cff' },
+  draw: { shape: 'torusKnot', color: '#ff3dcb' },
+  strings: { shape: 'icosahedron', color: '#a6ff3d' },
+  filter: { shape: 'cylinder', color: '#ffb62e' },
+  portal: { shape: 'torus', color: '#b36bff' },
+  objectLab: { shape: 'octahedron', color: '#ff7a59' },
+};
+
+function placeholder(id: ModeId): ModeFactory {
+  const meta = MODE_META[id];
+  return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
+}
+
+export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
+  voxel: placeholder('voxel'),
+  panel: placeholder('panel'),
+  draw: placeholder('draw'),
+  strings: placeholder('strings'),
+  filter: placeholder('filter'),
+  portal: placeholder('portal'),
+  objectLab: placeholder('objectLab'),
+};

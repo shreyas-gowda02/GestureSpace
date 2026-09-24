@@ -3,7 +3,13 @@
 // Also hosts the dev-only landmark fixture recorder / player (§9).
 
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { getCore, type DebugSnapshot } from '@/app/bootstrap';
+import {
+  debugSnapshot,
+  getCore,
+  leakCheck,
+  type DebugSnapshot,
+  type LeakCheckResult,
+} from '@/app/bootstrap';
 import { FEATURE_FLAGS, TUNING } from '@/config/tuning';
 import { downloadFixture, parseFixture } from '@/core/input';
 import type { SmoothingMode } from '@/vision/smoothing';
@@ -117,16 +123,31 @@ function FixtureControls({ snap }: { snap: DebugSnapshot }) {
   );
 }
 
+/** §23 dev check: cycle all modes 10× and confirm GPU memory is back where it started. */
+function LeakCheck() {
+  const [result, setResult] = useState<LeakCheckResult | null>(null);
+  return (
+    <div className="gs-debug__buttons">
+      <button type="button" className="gs-btn" onClick={() => setResult(leakCheck(10))}>
+        Leak check (10× all modes)
+      </button>
+      {result && (
+        <span className={result.ok ? 'gs-debug__ok' : 'gs-debug__error'}>
+          {result.ok ? '✓ no leak' : '✗ leak'} · geo {result.before.geometries}→
+          {result.after.geometries} · tex {result.before.textures}→{result.after.textures}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function DebugPanel() {
   const open = useAppStore((s) => s.debugOpen);
   const [snap, setSnap] = useState<DebugSnapshot | null>(null);
 
   useEffect(() => {
     if (!open) return;
-    const id = setInterval(
-      () => setSnap(getCore()?.debugSnapshot() ?? null),
-      TUNING.perf.debugPanelPollMs,
-    );
+    const id = setInterval(() => setSnap(debugSnapshot()), TUNING.perf.debugPanelPollMs);
     return () => clearInterval(id);
   }, [open]);
 
@@ -179,6 +200,12 @@ export function DebugPanel() {
                 {Math.round(h.score * 100)}% · palm {f2(h.palmScale)} · wrist ({f2(h.wrist.x)},{' '}
                 {f2(h.wrist.y)}){h.lostForMs > 0 && ` · lost ${Math.round(h.lostForMs)} ms`}
                 <span className="gs-muted"> · MediaPipe “{h.rawLabel}”</span>
+                <div className="gs-muted">
+                  depth {f2(h.depth.signal)} (step {h.depth.steps}) · cursor{' '}
+                  {h.cursor
+                    ? `${h.cursor.kind}${h.cursor.id ? ` “${h.cursor.id}”` : ''} (${f1(h.cursor.x)}, ${f1(h.cursor.y)}, ${f1(h.cursor.z)})`
+                    : '—'}
+                </div>
                 <div className="gs-debug__gestures">
                   {h.gestures.map((g) => (
                     <span key={g.name} className={`gs-debug__gesture is-${g.phase}`}>
@@ -198,6 +225,31 @@ export function DebugPanel() {
                 : 'idle'}
             </Row>
             <Row label="Hand distance">{f2(snap.twoHand.distance)}</Row>
+          </div>
+
+          <div className="gs-debug__section">
+            <h3 className="gs-debug__heading">Experience</h3>
+            <Row label="Active mode">
+              {snap.mode.active ?? '—'} · {snap.mode.created}/7 created
+            </Row>
+            <Row label="Captures">
+              {snap.mode.captures.length ? snap.mode.captures.join(', ') : 'none'}
+            </Row>
+            <Row label="Cursor targets">{snap.mode.targets}</Row>
+            <Row label="Undo / redo">
+              {snap.mode.canUndo ? 'yes' : 'no'} / {snap.mode.canRedo ? 'yes' : 'no'}
+            </Row>
+          </div>
+
+          <div className="gs-debug__section">
+            <h3 className="gs-debug__heading">Renderer</h3>
+            <Row label="Draw calls / tris">
+              {snap.renderer.calls} / {snap.renderer.triangles}
+            </Row>
+            <Row label="GPU geometries / textures">
+              {snap.renderer.geometries} / {snap.renderer.textures}
+            </Row>
+            <LeakCheck />
           </div>
 
           {FEATURE_FLAGS.fixtureRecorder && <FixtureControls snap={snap} />}
