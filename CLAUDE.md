@@ -58,19 +58,21 @@ video (right = turquoise, left = magenta, with side + confidence label), "Loadin
 "Show your hand to the camera" notices, tracker error + Retry, status bar "Right: tracked · Left: —",
 Debug panel (backtick key) with render/inference rates, inference ms, skipped frames, delegate,
 per-hand data, and a landmark fixture recorder/player. **Phase 3:** One Euro smoothing (visual + trigger
-profiles), confidence gate, jump rejection, 150 ms loss grace (hand drawn faded, status "lost…"),
+profiles, **plus render-time velocity prediction** so visuals update at 60 Hz with ~6 ms lag —
+D30; Debug panel Off / Smooth / Smooth + predict switch), confidence gate, jump rejection, 150 ms loss grace (hand drawn faded, status "lost…"),
 **main-user lock** (detects up to 4 hands, keeps one person's pair — see D23), stable left/right
 (label hysteresis + identity lock while a gesture holds), gestures pinch / grab / point / open palm /
 thumb-pinky (+ swipe, off) with hysteresis + debounce, two-hand pinch (scale / rotation /
 translation vs baseline), pinch ring + two-hand line/centre/×scale·angle overlay, status bar
 "Right: pinch · Left: open · Two-hand ✓", Debug panel gesture chips + main-user stats.
-95 tests passing.
+96 tests passing (incl. a jitter/lag budget test).
 
 **What does not work yet:** gestures don't DO anything yet (no 3D cursor / modes), no experiences (dock only switches the
 label/help), Undo/Redo/Clear/Reset buttons are inert, Help/Debug/Settings buttons only toggle state
 (panels not built).
 
-**Pushed to GitHub:** check with `git status` (the user pushes manually with `git push`).
+**Pushed to GitHub:** yes — everything up to `ba40b4d` (lag fix) was pushed by the user on
+2026-09-24. Later commits: check with `git status` (the user pushes manually with `git push`).
 
 ---
 
