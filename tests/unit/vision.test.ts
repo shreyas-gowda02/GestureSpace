@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RawDetection, RawHand } from '@/core/input';
-import type { Vec3 } from '@/core/types';
+import type { HandFrame, Vec3 } from '@/core/types';
 import { HandNormalizer, labelToSide } from '@/vision/handPipeline';
+import type { SmoothingMode } from '@/vision/smoothing';
+import { makeRng } from '../fixtures/syntheticHands';
 import {
   boundsInto,
   HAND_CONNECTIONS,
@@ -234,5 +236,74 @@ describe('side stability', () => {
     expect(f.right?.rawLandmarks[WRIST]?.y).toBeCloseTo(0.5); // ignored once
     f = n.process(det([sizedHand('Right', 0.35, 0.78, 0.16)]), true, 66);
     expect(f.right?.rawLandmarks[WRIST]?.y).toBeCloseTo(0.78); // persistent → accepted
+  });
+});
+
+describe('smoothing latency budget (real pipeline, 30 Hz inference / 60 Hz render)', () => {
+  // Tracker noise σ ≈ 0.002 view units (~1.4 px at 720p), like MediaPipe on a still hand.
+  const gauss = (r: () => number): number =>
+    Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r());
+
+  /** Drive the normalizer with a moving, noisy hand; return errors of the wrist in view x (px). */
+  function simulate(mode: SmoothingMode, truth: (t: number) => number, seed: number) {
+    const r = makeRng(seed);
+    const n = new HandNormalizer({ swapLabels: false });
+    n.setSmoothingMode(mode);
+    const out: { t: number; err: number }[] = [];
+    let nextSample = 0;
+    for (let t = 0; t <= 3500; t += 1000 / 60) {
+      while (nextSample <= t) {
+        const x = 0.5 - truth(nextSample) + 0.002 * gauss(r); // raw x (view = 1 - raw)
+        const hand = sizedHand('Right', x, 0.7 + 0.002 * gauss(r), 0.16);
+        n.process({ ...det([hand]), timestamp: nextSample }, true, t);
+        nextSample += 1000 / 30;
+      }
+      const f: HandFrame = n.tick(t);
+      const wx = f.right?.landmarks[WRIST]?.x ?? 0.5;
+      out.push({ t, err: (wx - 0.5 - truth(t)) * 720 });
+    }
+    return out;
+  }
+
+  const rms = (xs: number[]): number => Math.sqrt(xs.reduce((a, b) => a + b * b, 0) / xs.length);
+  function metrics(mode: SmoothingMode) {
+    const still = (t: number): number => (t < 1500 ? 0 : 0);
+    const ramp = (t: number): number => (t < 1500 ? 0 : (0.6 * (t - 1500)) / 1000); // 0.6 units/s
+    const wave = (t: number): number => 0.12 * Math.sin((2 * Math.PI * 1.5 * t) / 1000);
+    let jitter = 0;
+    let lagMs = 0;
+    let waveErr = 0;
+    const seeds = 8;
+    for (let s = 1; s <= seeds; s++) {
+      jitter +=
+        rms(
+          simulate(mode, still, s)
+            .filter((e) => e.t > 500)
+            .map((e) => e.err),
+        ) / seeds;
+      const moving = simulate(mode, ramp, s).filter((e) => e.t > 1750 && e.t < 2300);
+      lagMs += (moving.reduce((a, e) => a - e.err / 720 / 0.6, 0) / moving.length / seeds) * 1000;
+      waveErr +=
+        rms(
+          simulate(mode, wave, s)
+            .filter((e) => e.t > 1000)
+            .map((e) => e.err),
+        ) / seeds;
+    }
+    return { jitter, lagMs, waveErr };
+  }
+
+  it('prediction keeps most of the steadiness while cancelling the lag', () => {
+    const raw = metrics('off');
+    const smooth = metrics('smooth');
+    const predict = metrics('predict');
+    // Steadier than raw tracking when still…
+    expect(predict.jitter).toBeLessThan(raw.jitter * 0.65);
+    // …with lag no worse than the raw tracker's own frame age, and far below plain smoothing.
+    expect(predict.lagMs).toBeLessThan(12);
+    expect(predict.lagMs).toBeLessThan(smooth.lagMs * 0.6);
+    // Following a fast wave: closer to the finger than both raw and plain smoothing.
+    expect(predict.waveErr).toBeLessThan(raw.waveErr);
+    expect(predict.waveErr).toBeLessThan(smooth.waveErr);
   });
 });

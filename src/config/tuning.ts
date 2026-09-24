@@ -55,13 +55,26 @@ export const TUNING = {
   smoothing: {
     // One Euro filter. Units: coordinates are view-normalized (0..1), so `beta` is per
     // view-unit/s. (The spec's beta ≈ 0.007 assumed pixels: 0.007 × ~1280 px ≈ 9 per unit.)
+    // Tuned 2026-09-24 with a jitter/lag simulation after the user saw lag (see CLAUDE.md D30):
+    // higher beta + dCutoff detect motion ~2× sooner; prediction removes the rest of the lag.
     /** Visual profile: stronger, for overlays/objects. minCutoff comes from the Smoothing slider. */
-    visual: { beta: 8, dCutoff: 1.0 },
-    /** Trigger profile: lighter / lower lag, for gesture distances. */
-    trigger: { minCutoff: 2.5, beta: 20, dCutoff: 1.0 },
+    visual: { beta: 40, dCutoff: 2.0 },
+    /** Trigger profile: lighter / lower lag, for gesture distances (never predicted). */
+    trigger: { minCutoff: 2.5, beta: 40, dCutoff: 2.0 },
     /** Smoothing slider 0..1 → visual minCutoff (Hz): 0 = responsive (max), 1 = smooth (min). */
     sliderMinCutoffRange: { min: 0.3, max: 3.0 },
-    defaultSlider: 0.65,
+    /** 0.78 → ≈0.9 Hz. */
+    defaultSlider: 0.78,
+    /**
+     * Visual prediction: between inferences (30 Hz) each render frame (60 Hz) extrapolates the
+     * smoothed landmarks along their velocity to "now". Costs a brief ~5 px overshoot on sudden stops.
+     */
+    predict: {
+      /** Low-pass (Hz) on the velocity used for prediction; higher = reacts faster, noisier. */
+      velocityCutoff: 5,
+      /** Never extrapolate further than this past the last inference (e.g. tracker stalls). */
+      maxAheadMs: 50,
+    },
   },
 
   confidence: {

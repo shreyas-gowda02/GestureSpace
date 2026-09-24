@@ -59,10 +59,16 @@ export function smoothingToMinCutoff(slider: number): number {
   return lerp(r.max, r.min, clamp(slider, 0, 1));
 }
 
-/** 21 × (x, y, z) One Euro filters for one profile. Allocated once. */
+/**
+ * 21 × (x, y, z) One Euro filters for one profile, plus a low-passed velocity per coordinate
+ * (units/s) used for prediction. Allocated once; no per-frame allocation.
+ */
 class ProfileSmoother {
   readonly params: OneEuroParams;
   private readonly filters: OneEuroFilter[];
+  private readonly value = new Float64Array(LANDMARK_COUNT * 3);
+  private readonly velocity = new Float64Array(LANDMARK_COUNT * 3);
+  private lastT = -1;
 
   constructor(params: OneEuroParams) {
     this.params = params;
@@ -71,23 +77,56 @@ class ProfileSmoother {
   }
 
   apply(src: readonly Vec3[], dst: Vec3[], t: number): void {
+    const dt = this.lastT >= 0 && t > this.lastT ? (t - this.lastT) / 1000 : 0;
+    const a = dt > 0 ? alpha(TUNING.smoothing.predict.velocityCutoff, dt) : 0;
+    if (dt === 0) this.velocity.fill(0);
+    this.lastT = t;
     for (let i = 0; i < LANDMARK_COUNT; i++) {
       const s = src[i];
       const d = dst[i];
-      const fx = this.filters[i * 3];
-      const fy = this.filters[i * 3 + 1];
-      const fz = this.filters[i * 3 + 2];
-      if (!s || !d || !fx || !fy || !fz) continue;
-      d.x = fx.filter(s.x, t);
-      d.y = fy.filter(s.y, t);
-      d.z = fz.filter(s.z, t);
+      if (!s || !d) continue;
+      d.x = this.step(i * 3, s.x, t, dt, a);
+      d.y = this.step(i * 3 + 1, s.y, t, dt, a);
+      d.z = this.step(i * 3 + 2, s.z, t, dt, a);
+    }
+  }
+
+  /** Extrapolate the filtered positions `aheadS` seconds forward along their velocity. */
+  predictInto(dst: Vec3[], aheadS: number): void {
+    const v = this.value;
+    const vel = this.velocity;
+    for (let i = 0; i < LANDMARK_COUNT; i++) {
+      const d = dst[i];
+      if (!d) continue;
+      const k = i * 3;
+      d.x = (v[k] ?? 0) + (vel[k] ?? 0) * aheadS;
+      d.y = (v[k + 1] ?? 0) + (vel[k + 1] ?? 0) * aheadS;
+      d.z = (v[k + 2] ?? 0) + (vel[k + 2] ?? 0) * aheadS;
     }
   }
 
   reset(): void {
     for (const f of this.filters) f.reset();
+    this.velocity.fill(0);
+    this.lastT = -1;
+  }
+
+  private step(k: number, raw: number, t: number, dt: number, a: number): number {
+    const f = this.filters[k];
+    if (!f) return raw;
+    const x = f.filter(raw, t);
+    if (dt > 0) {
+      const prev = this.value[k] ?? x;
+      const vel = this.velocity[k] ?? 0;
+      this.velocity[k] = vel + a * ((x - prev) / dt - vel);
+    }
+    this.value[k] = x;
+    return x;
   }
 }
+
+/** How the VISUAL landmarks are produced (Debug panel switch; default 'predict'). */
+export type SmoothingMode = 'off' | 'smooth' | 'predict';
 
 /** Visual + trigger smoothing for one hand slot. */
 export class LandmarkSmoother {
@@ -111,6 +150,14 @@ export class LandmarkSmoother {
   apply(src: readonly Vec3[], visualOut: Vec3[], triggerOut: Vec3[], t: number): void {
     this.visual.apply(src, visualOut, t);
     this.trigger.apply(src, triggerOut, t);
+  }
+
+  /**
+   * Visual landmarks extrapolated `aheadMs` past the last inference (render at 60 Hz while the
+   * tracker runs at 30 Hz): cancels most of the filter's lag while keeping its steadiness.
+   */
+  predictVisual(out: Vec3[], aheadMs: number): void {
+    this.visual.predictInto(out, aheadMs / 1000);
   }
 
   reset(): void {

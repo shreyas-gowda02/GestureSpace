@@ -5,14 +5,15 @@
 //   3. side assignment            MediaPipe labels, with hysteresis; locked during captures
 //   4. jump rejection             ignore a single impossible wrist jump
 //   5. One Euro smoothing         visual + trigger profiles
-// Every render frame, `tick()` runs the loss grace period (freeze, then remove).
+// Every render frame, `tick()` predicts the visual landmarks to "now" (render 60 Hz vs inference
+// 30 Hz) and runs the loss grace period (freeze, then remove).
 // All objects are preallocated and reused — no per-frame allocation.
 
 import { TUNING } from '@/config/tuning';
 import type { HandFrame, HandSide, TrackedHand, Vec2, Vec3 } from '@/core/types';
 import type { RawDetection, RawHand } from '@/core/input';
 import { boundsInto, LANDMARK_COUNT, makeLandmarkBuffer, palmScale, WRIST } from './landmarks';
-import { LandmarkSmoother, smoothingToMinCutoff } from './smoothing';
+import { LandmarkSmoother, smoothingToMinCutoff, type SmoothingMode } from './smoothing';
 
 const SIDES: readonly HandSide[] = ['right', 'left'];
 const other = (s: HandSide): HandSide => (s === 'right' ? 'left' : 'right');
@@ -38,6 +39,8 @@ export class HandSlot implements TrackedHand {
   /** Unsmoothed view-space wrist of the last accepted sample (continuity + jump checks). */
   readonly lastWrist: Vec2 = { x: 0, y: 0 };
   jumpCount = 0;
+  /** Render time of the last accepted sample (prediction horizon starts here). */
+  sampledAt = 0;
   readonly viewRaw: Vec3[] = makeLandmarkBuffer();
   readonly smoother = new LandmarkSmoother();
 
@@ -93,6 +96,8 @@ export class HandNormalizer {
   usedCount = 0;
   /** While true (a gesture capture is active), sides follow proximity only — labels are ignored. */
   identityLocked = false;
+  /** Visual landmark mode: raw ('off'), filtered ('smooth') or filtered + predicted ('predict'). */
+  smoothingMode: SmoothingMode = 'predict';
 
   private readonly swap: boolean;
   private readonly cands: Candidate[] = Array.from({ length: MAX_CANDIDATES }, () => ({
@@ -129,6 +134,11 @@ export class HandNormalizer {
     return this.slots.right.smoother.visualMinCutoff;
   }
 
+  /** Debug-panel switch to compare raw vs smoothed vs smoothed + predicted visuals live. */
+  setSmoothingMode(mode: SmoothingMode): void {
+    this.smoothingMode = mode;
+  }
+
   /**
    * @param mirror whether the view is mirrored (selfie); view x = mirror ? 1 - x : x
    * @param now render timestamp (ms)
@@ -154,7 +164,7 @@ export class HandNormalizer {
       const slot = this.slots[side];
       const s = side === 'right' ? forRight : forLeft;
       if (s?.cand?.raw) {
-        this.updateSlot(slot, s.cand.raw, s.prev === side, mirror, aspect, det.timestamp);
+        this.updateSlot(slot, s.cand.raw, s.prev === side, mirror, aspect, det.timestamp, now);
       } else if (slot.present && slot.lostSince < 0) {
         slot.lostSince = now;
       }
@@ -162,15 +172,24 @@ export class HandNormalizer {
     return this.tick(now);
   }
 
-  /** Every render frame: advance the loss grace period (freeze, then remove). */
+  /** Every render frame: predict visual landmarks to `now`; advance the loss grace period. */
   tick(now: number): HandFrame {
     const f = this.frame;
     f.timestamp = now;
+    const predict = this.smoothingMode === 'predict';
     for (const side of SIDES) {
       const slot = this.slots[side];
       if (slot.present && slot.lostSince >= 0) {
         slot.lostForMs = now - slot.lostSince;
         if (slot.lostForMs > TUNING.confidence.HAND_LOSS_GRACE_MS) this.dropSlot(slot);
+        else if (predict) slot.smoother.predictVisual(slot.landmarks, 0); // freeze, no drift
+      } else if (slot.present && predict) {
+        const ahead = Math.min(
+          Math.max(now - slot.sampledAt, 0),
+          TUNING.smoothing.predict.maxAheadMs,
+        );
+        slot.smoother.predictVisual(slot.landmarks, ahead);
+        boundsInto(slot.bbox, slot.landmarks);
       }
       f[side] = slot.present ? slot : undefined;
     }
@@ -359,6 +378,7 @@ export class HandNormalizer {
     mirror: boolean,
     aspect: number,
     t: number,
+    now: number,
   ): void {
     const w = raw.landmarks[WRIST];
     if (!w) return;
@@ -398,6 +418,18 @@ export class HandNormalizer {
       }
     }
     slot.smoother.apply(slot.viewRaw, slot.landmarks, slot.triggerLandmarks, t);
+    if (this.smoothingMode === 'off') {
+      for (let j = 0; j < LANDMARK_COUNT; j++) {
+        const v = slot.viewRaw[j];
+        const d = slot.landmarks[j];
+        if (v && d) {
+          d.x = v.x;
+          d.y = v.y;
+          d.z = v.z;
+        }
+      }
+    }
+    slot.sampledAt = now;
     slot.palmScale = palmScale(slot.landmarks, aspect);
     boundsInto(slot.bbox, slot.landmarks);
     slot.lastWrist.x = vx;

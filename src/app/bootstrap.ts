@@ -22,6 +22,7 @@ import { ViewportMapper } from '@/spatial/ViewportMapper';
 import { useAppStore } from '@/state/appStore';
 import { createLogger } from '@/utils/logger';
 import { HandNormalizer } from '@/vision/handPipeline';
+import type { SmoothingMode } from '@/vision/smoothing';
 import { HandTracker, type TrackerDelegate, type TrackerStatus } from '@/vision/HandTracker';
 import { WRIST } from '@/vision/landmarks';
 
@@ -87,6 +88,7 @@ export interface DebugSnapshot {
   /** Main-user lock at the last inference. */
   userLock: { detected: number; gated: number; used: number; identityLocked: boolean };
   smoothingHz: number;
+  smoothingMode: SmoothingMode;
   hands: {
     side: HandSide;
     rawLabel: string;
@@ -212,6 +214,11 @@ export class Core {
     void this.tracker.load();
   }
 
+  /** Debug switch: raw vs smoothed vs smoothed + predicted hand visuals. */
+  setSmoothingMode(mode: SmoothingMode): void {
+    this.normalizer.setSmoothingMode(mode);
+  }
+
   /** Replay recorded landmarks through the full pipeline (works with or without a camera). */
   playFixture(fixture: LandmarkFixture): void {
     this.playback?.dispose();
@@ -290,6 +297,7 @@ export class Core {
         identityLocked: n.identityLocked,
       },
       smoothingHz: n.visualMinCutoff,
+      smoothingMode: n.smoothingMode,
       hands,
       twoHand: {
         active: two.active,

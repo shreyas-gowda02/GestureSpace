@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'r
 import { getCore, type DebugSnapshot } from '@/app/bootstrap';
 import { FEATURE_FLAGS, TUNING } from '@/config/tuning';
 import { downloadFixture, parseFixture } from '@/core/input';
+import type { SmoothingMode } from '@/vision/smoothing';
 import { useAppStore } from '@/state/appStore';
 
 const f1 = (n: number): string => n.toFixed(1);
@@ -24,6 +25,31 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
     <div className="gs-debug__row">
       <span className="gs-debug__label">{label}</span>
       <span className="gs-debug__value">{children}</span>
+    </div>
+  );
+}
+
+const SMOOTHING_MODES: { mode: SmoothingMode; label: string }[] = [
+  { mode: 'off', label: 'Off (raw)' },
+  { mode: 'smooth', label: 'Smooth' },
+  { mode: 'predict', label: 'Smooth + predict' },
+];
+
+/** Live A/B switch for the hand visuals (gesture detection always uses its own profile). */
+function SmoothingSwitch({ current }: { current: SmoothingMode }) {
+  return (
+    <div className="gs-debug__buttons" role="group" aria-label="Smoothing mode">
+      {SMOOTHING_MODES.map(({ mode, label }) => (
+        <button
+          key={mode}
+          type="button"
+          className="gs-btn"
+          aria-pressed={current === mode}
+          onClick={() => getCore()?.setSmoothingMode(mode)}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -136,6 +162,7 @@ export function DebugPanel() {
               {snap.userLock.identityLocked && ' · 🔒'}
             </Row>
             <Row label="Smoothing">{f2(snap.smoothingHz)} Hz min cutoff</Row>
+            <SmoothingSwitch current={snap.smoothingMode} />
             <Row label="Input">
               {snap.playback
                 ? `fixture “${snap.playback.name}” ${Math.round(snap.playback.progress * 100)}%`
