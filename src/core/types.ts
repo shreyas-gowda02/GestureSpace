@@ -164,7 +164,21 @@ export interface VoxelUiState {
   count: number;
 }
 
+export type DrawTool = 'pen' | 'eraser';
+
+export interface DrawUiState {
+  tool: DrawTool;
+  /** '#rrggbb' */
+  color: string;
+  /** Index into TUNING.draw.widths. */
+  width: number;
+  glow: boolean;
+  /** Strokes in the drawing. */
+  count: number;
+}
+
 /** Per experience: what its tool panel shows. Grows as experiences land. */
 export interface ModeUiStates {
   voxel: VoxelUiState;
+  draw: DrawUiState;
 }

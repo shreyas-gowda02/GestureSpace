@@ -108,3 +108,31 @@ test('voxel tools: keys and buttons drive the depth layer, tool, colour and Dept
   await expect(tools.getByRole('button', { name: /Depth Lock off/ })).toBeVisible();
   await expect(tools).toContainText('0 voxels');
 });
+
+test('air draw tools: X toggles the eraser; colour, width and glow buttons work', async ({
+  page,
+}) => {
+  await openApp(page);
+  await page.keyboard.press('3');
+  const tools = page.getByLabel('Air Draw tools');
+  await expect(tools.getByRole('button', { name: 'Pen' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('x');
+  await expect(tools.getByRole('button', { name: 'Eraser' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await tools.getByRole('button', { name: 'Pen' }).click();
+  await tools.getByRole('button', { name: 'Magenta' }).click();
+  await expect(tools.getByRole('button', { name: 'Magenta' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await tools.getByRole('button', { name: 'Thick' }).click();
+  await expect(tools.getByRole('button', { name: 'Thick' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await tools.getByRole('button', { name: 'Glow on' }).click();
+  await expect(tools.getByRole('button', { name: 'Glow off' })).toBeVisible();
+  await expect(tools).toContainText('0 strokes');
+});

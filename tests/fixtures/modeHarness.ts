@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { DEFAULT_SETTINGS } from '@/config/tuning';
+import { FixturePlaybackSource, type LandmarkFixture } from '@/core/input';
 import type {
   HandGestures,
   HandSide,
@@ -12,6 +13,7 @@ import type {
   TrackedHand,
   Vec2,
 } from '@/core/types';
+import { GestureEngine, perceptionStep } from '@/gestures/GestureEngine';
 import { makeGestureState } from '@/gestures/stateMachine';
 import { makeTwoHandState } from '@/gestures/twoHand';
 import { ModeController, type BaseContext } from '@/modes/ModeController';
@@ -19,7 +21,9 @@ import { MODE_FACTORIES } from '@/modes/registry';
 import type { OverlayCanvas2D } from '@/scene/overlay';
 import { CaptureManager } from '@/spatial/CaptureManager';
 import { CoordinateMapper, RaycastCursor } from '@/spatial/CoordinateMapper';
+import { DepthEstimator } from '@/spatial/DepthEstimator';
 import { ViewportMapper } from '@/spatial/ViewportMapper';
+import { HandNormalizer } from '@/vision/handPipeline';
 import { INDEX_TIP, makeLandmarkBuffer, THUMB_TIP } from '@/vision/landmarks';
 
 export const VIEW_W = 1280;
@@ -90,6 +94,65 @@ export function movePinchPoint(hand: TrackedHand, x: number, y: number): void {
     }
   }
 }
+
+/**
+ * A headless Core for one experience: plays hand recordings back to back through the same
+ * per-frame steps Core runs — perceptionStep → depth estimators → steady-aim cursors (D43) → lost
+ * hands release captures → ModeController — so a pinch "in the video" acts exactly as in the app.
+ */
+export function pipelineRig(mode: ModeId) {
+  const base = baseContext();
+  const mc = new ModeController(base, MODE_FACTORIES);
+  mc.switchTo(mode);
+  const norm = new HandNormalizer();
+  const engine = new GestureEngine();
+  let depth: Record<HandSide, DepthEstimator> = {
+    left: new DepthEstimator(),
+    right: new DepthEstimator(),
+  };
+  const frame: InteractionFrame = {
+    timestamp: 0,
+    dt: 1 / 60,
+    hands: norm.frame,
+    gestures: engine.frame,
+    cursors: base.cursors.cursors,
+    dominant: 'right',
+    activeMode: mode,
+  };
+  let clock = 0;
+
+  /** Play a recording to its end (+300 ms); `visit(t)` runs after every frame (t from its start). */
+  function play(fixture: LandmarkFixture, visit?: (t: number) => void): void {
+    const start = clock;
+    const src = new FixturePlaybackSource(fixture, start, false);
+    const aspect = fixture.videoWidth / fixture.videoHeight;
+    for (let now = start; now <= start + src.duration + 300; now += 1000 / 60) {
+      const holding = base.capture.count > 0;
+      if (perceptionStep(norm, engine, src.poll(now), true, aspect, now, holding)) {
+        depth = { left: depth.right, right: depth.left };
+        base.capture.swapSides();
+        base.cursors.swapSides();
+        mc.swapSides();
+      }
+      for (const side of SIDES) {
+        const d = depth[side].update(norm.frame[side], now);
+        const g = engine.frame[side];
+        if (g) g.depthSignal = d;
+      }
+      base.cursors.update(norm.frame, engine.frame);
+      for (const side of SIDES) if (!norm.frame[side]) base.capture.release(side, 'lost');
+      frame.timestamp = now;
+      mc.update(frame);
+      visit?.(now - start);
+      clock = now;
+    }
+    clock += 1000;
+  }
+
+  return { base, mc, frame, play };
+}
+
+const SIDES: readonly HandSide[] = ['right', 'left'];
 
 /**
  * Drives one experience frame by frame at 60 Hz. Per hand: `show` / `hide`, `aim` (cursor NDC),

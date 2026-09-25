@@ -4,6 +4,7 @@
 import type * as THREE from 'three';
 import type { KeyAction } from '@/config/keybindings';
 import type {
+  DrawTool,
   InteractionFrame,
   ModeId,
   ModeUiStates,
@@ -41,7 +42,11 @@ export interface ModeContext {
 export type ToolAction =
   | { type: 'voxelTool'; tool: VoxelTool }
   | { type: 'voxelColor'; color: string }
-  | { type: 'voxelMaterial'; material: VoxelMaterial };
+  | { type: 'voxelMaterial'; material: VoxelMaterial }
+  | { type: 'drawTool'; tool: DrawTool }
+  | { type: 'drawColor'; color: string }
+  | { type: 'drawWidth'; width: number }
+  | { type: 'drawGlow' };
 
 export type ModeAction = KeyAction | ToolAction;
 

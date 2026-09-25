@@ -25,6 +25,11 @@ export class OverlayCanvas2D {
     this.ctx = ctx;
   }
 
+  /** Device pixels per CSS px of the canvas. */
+  get pixelRatio(): number {
+    return this.dpr;
+  }
+
   setSize(width: number, height: number, dpr: number): void {
     if (width === this.width && height === this.height && dpr === this.dpr) return;
     this.width = width;

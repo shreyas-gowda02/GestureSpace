@@ -4,7 +4,7 @@
 
 import { modeAction } from '@/app/bootstrap';
 import { TUNING } from '@/config/tuning';
-import type { ModeId, VoxelMaterial, VoxelTool } from '@/core/types';
+import type { DrawTool, ModeId, VoxelMaterial, VoxelTool } from '@/core/types';
 import { useAppStore } from '@/state/appStore';
 
 const VOXEL_TOOLS: readonly { tool: VoxelTool; label: string }[] = [
@@ -128,11 +128,87 @@ function VoxelTools() {
   );
 }
 
+const DRAW_TOOLS: readonly { tool: DrawTool; label: string }[] = [
+  { tool: 'pen', label: 'Pen' },
+  { tool: 'eraser', label: 'Eraser' },
+];
+
+function DrawTools() {
+  const ui = useAppStore((s) => s.modeUi.draw);
+  if (!ui) return null;
+
+  return (
+    <>
+      <h3 className="gs-toolpanel__sub">
+        Tool <kbd>X</kbd>
+      </h3>
+      <div className="gs-segmented" role="group" aria-label="Draw tool">
+        {DRAW_TOOLS.map(({ tool, label }) => (
+          <button
+            key={tool}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.tool === tool}
+            onClick={() => modeAction({ type: 'drawTool', tool })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">Colour</h3>
+      <div className="gs-swatches" role="group" aria-label="Pen colour">
+        {TUNING.draw.palette.map(({ name, hex }) => (
+          <button
+            key={hex}
+            type="button"
+            className="gs-swatch"
+            style={{ background: hex }}
+            aria-label={name}
+            title={name}
+            aria-pressed={ui.color === hex}
+            onClick={() => modeAction({ type: 'drawColor', color: hex })}
+          />
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">Width</h3>
+      <div className="gs-segmented" role="group" aria-label="Pen width">
+        {TUNING.draw.widths.map(({ name }, i) => (
+          <button
+            key={name}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.width === i}
+            onClick={() => modeAction({ type: 'drawWidth', width: i })}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        className="gs-btn gs-depthlock"
+        aria-pressed={ui.glow}
+        onClick={() => modeAction({ type: 'drawGlow' })}
+      >
+        {ui.glow ? 'Glow on' : 'Glow off'}
+      </button>
+      <p className="gs-muted gs-toolpanel__count">
+        {ui.count} {ui.count === 1 ? 'stroke' : 'strokes'}
+      </p>
+    </>
+  );
+}
+
 /** The active experience's controls (nothing for experiences still shown as placeholders). */
 export function ModeTools({ mode }: { mode: ModeId }) {
   switch (mode) {
     case 'voxel':
       return <VoxelTools />;
+    case 'draw':
+      return <DrawTools />;
     default:
       return null;
   }

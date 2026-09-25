@@ -3,6 +3,7 @@
 
 import { MODE_IDS, type ModeId } from '@/core/types';
 import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
+import { DrawMode } from './draw/DrawMode';
 import type { ModeFactory } from './types';
 import { VoxelMode } from './voxel/VoxelMode';
 
@@ -65,9 +66,11 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     tagline: 'Draw glowing strokes with your index finger.',
     phase: 8,
     help: [
-      { gesture: 'Pinch', action: 'Pen down' },
+      { gesture: 'Pinch (dominant hand)', action: 'Pen down — move to draw' },
       { gesture: 'Release', action: 'Pen up' },
-      { gesture: 'Eraser tool + pinch', action: 'Erase stroke under cursor' },
+      { gesture: 'Eraser (X) + pinch', action: 'Remove the stroke under the cursor' },
+      { gesture: 'Eraser + hold pinch + sweep', action: 'Remove every stroke you touch' },
+      { gesture: 'Ctrl+Z / C', action: 'Undo a stroke / clear the drawing' },
     ],
   },
   strings: {
@@ -120,19 +123,21 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
 export const MODE_LIST: readonly ModeMeta[] = MODE_IDS.map((id) => MODE_META[id]);
 
 /** Experiences that are fully built (the rest still run as PlaceholderMode). */
-export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>(['voxel']);
+export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>(['voxel', 'draw']);
 
 /** Placeholder look per experience until its real implementation lands. */
-const PLACEHOLDERS: Record<Exclude<ModeId, 'voxel'>, { shape: PlaceholderShape; color: string }> = {
+const PLACEHOLDERS: Record<
+  Exclude<ModeId, 'voxel' | 'draw'>,
+  { shape: PlaceholderShape; color: string }
+> = {
   panel: { shape: 'panel', color: '#6c8cff' },
-  draw: { shape: 'torusKnot', color: '#ff3dcb' },
   strings: { shape: 'icosahedron', color: '#a6ff3d' },
   filter: { shape: 'cylinder', color: '#ffb62e' },
   portal: { shape: 'torus', color: '#b36bff' },
   objectLab: { shape: 'octahedron', color: '#ff7a59' },
 };
 
-function placeholder(id: Exclude<ModeId, 'voxel'>): ModeFactory {
+function placeholder(id: Exclude<ModeId, 'voxel' | 'draw'>): ModeFactory {
   const meta = MODE_META[id];
   return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
 }
@@ -140,7 +145,7 @@ function placeholder(id: Exclude<ModeId, 'voxel'>): ModeFactory {
 export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
   voxel: () => new VoxelMode(),
   panel: placeholder('panel'),
-  draw: placeholder('draw'),
+  draw: () => new DrawMode(),
   strings: placeholder('strings'),
   filter: placeholder('filter'),
   portal: placeholder('portal'),

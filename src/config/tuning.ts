@@ -290,8 +290,57 @@ export const TUNING = {
     mirror: true,
   },
 
+  /** Air Draw (§15). Sizes are fractions of the video height, so drawings scale with the view. */
   draw: {
+    /** A pen point is kept only once it moved this far (aspect-corrected view units ≈ 3 px at 720p). */
     MIN_STROKE_STEP: 0.004,
+    /** 8 neon colours (§15); the first is the default. */
+    palette: [
+      { name: 'Cyan', hex: '#2ef2ff' },
+      { name: 'Magenta', hex: '#ff2bd6' },
+      { name: 'Lime', hex: '#b6ff2e' },
+      { name: 'Yellow', hex: '#ffe23d' },
+      { name: 'Orange', hex: '#ff8a2b' },
+      { name: 'Red', hex: '#ff3b5c' },
+      { name: 'Violet', hex: '#a45bff' },
+      { name: 'White', hex: '#ffffff' },
+    ],
+    /** 3 brush widths (≈ 4 / 9 / 17 px on a 720 px tall view). */
+    widths: [
+      { name: 'Thin', size: 0.006 },
+      { name: 'Medium', size: 0.012 },
+      { name: 'Thick', size: 0.024 },
+    ],
+    defaultWidth: 1,
+    /**
+     * Extra One Euro smoothing on the pen, on top of the hand smoothing (view units / s). Picked on
+     * the user's 43 real moving pinches (720p px): wiggle 1.3 / 8.4 px (median / p95) without it →
+     * 0.8 / 6.1 px, for a line trailing the pen by 4.4 / 11 px (β 10: 5.9 / 15 px, barely smoother).
+     */
+    oneEuro: { minCutoff: 2, beta: 20, dCutoff: 1 },
+    /** Eraser reach around the pen (≈ 14 px at 720p), plus the stroke's own half-width. */
+    eraserRadius: 0.02,
+    /** The stroke the eraser would remove: a red halo (px wider than the line) + a dashed line. */
+    eraseHighlight: { color: '#ff5470', alpha: 0.4, pad: 10, dash: [8, 6] },
+    /**
+     * Neon glow, drawn additively: wide see-through passes (× line width, alpha), the line, then a
+     * whiter core (× width). Not canvas shadowBlur: repainting 200 glowing strokes took ~250 ms
+     * with blur vs ~90 ms like this (browser pane, Intel iGPU, 1600×900). Repaints are rare: the
+     * finished strokes are cached and a new stroke is just added on top (~1.5 ms).
+     */
+    glow: {
+      layers: [
+        { width: 4, alpha: 0.06 },
+        { width: 2.9, alpha: 0.1 },
+        { width: 1.9, alpha: 0.18 },
+      ],
+      core: 0.4,
+      coreWhite: 0.55,
+    },
+    /** Points a new stroke's buffer holds before it doubles. */
+    initialPoints: 256,
+    /** Tool-panel updates (stroke count) are published at most this often. */
+    uiHz: 10,
   },
 
   history: {

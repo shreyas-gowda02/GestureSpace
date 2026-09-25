@@ -3,68 +3,14 @@
 // pinch in the "video" becomes voxels exactly as it would in the app.
 
 import { describe, expect, it } from 'vitest';
-import { FixturePlaybackSource, type LandmarkFixture } from '@/core/input';
-import type { HandSide, InteractionFrame } from '@/core/types';
-import { GestureEngine, perceptionStep } from '@/gestures/GestureEngine';
-import { ModeController } from '@/modes/ModeController';
-import { MODE_FACTORIES } from '@/modes/registry';
 import type { VoxelMode } from '@/modes/voxel/VoxelMode';
-import { DepthEstimator } from '@/spatial/DepthEstimator';
-import { HandNormalizer } from '@/vision/handPipeline';
-import { baseContext } from '../fixtures/modeHarness';
-import { ASPECT, voxelPullScenario, voxelStrokeScenario } from '../fixtures/syntheticHands';
+import { pipelineRig } from '../fixtures/modeHarness';
+import { pinchDragScenario, voxelPullScenario } from '../fixtures/syntheticHands';
 
-const SIDES: readonly HandSide[] = ['right', 'left'];
-
-/** A headless Core: plays recordings back to back into the Voxel Builder. */
+/** A headless Core running the Voxel Builder. */
 function voxelApp() {
-  const base = baseContext();
-  const mc = new ModeController(base, MODE_FACTORIES);
-  mc.switchTo('voxel');
+  const { base, mc, play } = pipelineRig('voxel');
   const mode = mc.activeMode as VoxelMode;
-  const norm = new HandNormalizer();
-  const engine = new GestureEngine();
-  let depth: Record<HandSide, DepthEstimator> = {
-    left: new DepthEstimator(),
-    right: new DepthEstimator(),
-  };
-  const frame: InteractionFrame = {
-    timestamp: 0,
-    dt: 1 / 60,
-    hands: norm.frame,
-    gestures: engine.frame,
-    cursors: base.cursors.cursors,
-    dominant: 'right',
-    activeMode: 'voxel',
-  };
-  let clock = 0;
-
-  function play(fixture: LandmarkFixture, visit?: (t: number) => void): void {
-    const start = clock;
-    const src = new FixturePlaybackSource(fixture, start, false);
-    for (let now = start; now <= start + src.duration + 300; now += 1000 / 60) {
-      const holding = base.capture.count > 0;
-      if (perceptionStep(norm, engine, src.poll(now), true, ASPECT, now, holding)) {
-        depth = { left: depth.right, right: depth.left };
-        base.capture.swapSides();
-        base.cursors.swapSides();
-        mc.swapSides();
-      }
-      for (const side of SIDES) {
-        const d = depth[side].update(norm.frame[side], now);
-        const g = engine.frame[side];
-        if (g) g.depthSignal = d;
-      }
-      base.cursors.update(norm.frame, engine.frame);
-      for (const side of SIDES) if (!norm.frame[side]) base.capture.release(side, 'lost');
-      frame.timestamp = now;
-      mc.update(frame);
-      visit?.(now - start);
-      clock = now;
-    }
-    clock += 1000;
-  }
-
   const cells = (): { x: number; y: number; z: number }[] => {
     const out: { x: number; y: number; z: number }[] = [];
     mode.grid.forEach((k) =>
@@ -98,7 +44,7 @@ describe('Voxel Builder end to end (synthetic hands through the full pipeline)',
     it(`pinch, hold still, drag, release${jitter ? ' (jittery landmarks)' : ''}`, () => {
       const app = voxelApp();
       let duringHold = -1;
-      app.play(voxelStrokeScenario(jitter, 4), (t) => {
+      app.play(pinchDragScenario(jitter, 4), (t) => {
         if (t > 1350 && t < 1400) duringHold = app.mode.grid.count;
       });
       // A stationary pinch creates exactly one voxel (§13.9)…
@@ -120,7 +66,7 @@ describe('Voxel Builder end to end (synthetic hands through the full pipeline)',
     const shown: { t: number; cell: string }[] = [];
     let pinchAt = -1;
     let first = '';
-    app.play(voxelStrokeScenario(), (t) => {
+    app.play(pinchDragScenario(), (t) => {
       if (ghost?.visible) {
         const p = ghost.position;
         shown.push({ t, cell: `${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.z)}` });
@@ -138,7 +84,7 @@ describe('Voxel Builder end to end (synthetic hands through the full pipeline)',
 
   it('pinch the first voxel’s face and pull the hand closer: a column grows toward the camera', () => {
     const app = voxelApp();
-    app.play(voxelStrokeScenario());
+    app.play(pinchDragScenario());
     const row = app.mode.grid.count;
     const first = app.cells().sort((a, b) => a.x - b.x)[0];
     app.play(voxelPullScenario());

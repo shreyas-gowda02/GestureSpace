@@ -39,9 +39,9 @@ gesture engine and ONE renderer. Everything runs locally; no backend, no uploads
 | 3     | Smoothing + gestures + main-user lock (**M0** demo)                  | ✅ done — awaiting user's real-hand check                                 | `phase-3` commit     |
 | 4     | Spatial cursor + ModeController                                      | ✅ done — awaiting user's real-hand check                                 | `phase-4` commit     |
 | 5     | Voxel Builder (**M1** demo)                                          | ✅ done — user's real-hand check **PENDING** (paused for Phase 8)         | `phase-5` commit     |
-| 6     | Two-hand transform core                                              | ⏸ deferred — after Phase 8 (user's order, D46)                            | —                    |
-| 7     | Spatial Panel + Texture Surface                                      | ⏸ deferred — after Phase 8 (user's order, D46)                            | —                    |
-| 8     | Air Draw                                                             | ⏭ **next** — built out of order (user, D46)                               | —                    |
+| 6     | Two-hand transform core                                              | ⏭ **next** (order after Phase 8: 6 → 7 → 9…, D46)                         | —                    |
+| 7     | Spatial Panel + Texture Surface                                      | ⬜ after Phase 6 (D46)                                                    | —                    |
+| 8     | Air Draw                                                             | ✅ done out of order (D46) — awaiting user's real-hand check              | `phase-8` commit     |
 | 9     | Hand Strings                                                         | ⬜                                                                        | —                    |
 | 10    | Filter Lab + Portal (**M3** demo)                                    | ⬜                                                                        | —                    |
 | 11    | 3D Object Lab (completes **M2**)                                     | ⬜                                                                        | —                    |
@@ -89,9 +89,13 @@ Paint (X), 8 colours, solid / glass / glow; every stroke / extrusion / Clear is 
 two-hand pinch moves / turns / scales the structure; Reset view. Structures sit in a gentle 3/4
 view so top and side faces show. The cursor now uses a **steady aim** (D43): the voxel lands where
 the ghost showed it. Tool panel with all controls (D45). 5,000 voxels ≈ 63 FPS worst case on the
-Intel iGPU. 174 tests + 6 E2E passing.
+Intel iGPU. **Phase 8 — Air Draw** (built before 6–7, D46): pinch with the dominant hand to draw
+smooth glowing strokes (Catmull-Rom, extra pen smoothing tuned on the user's pinches), release to
+lift; 8 neon colours, 3 widths, glow on/off; the eraser (X) removes the stroke you pinch, or every
+stroke you sweep over, highlighted in red first; each stroke / erase / Clear is one undo step;
+strokes stay aligned through resizes (D47). 194 tests + 7 E2E passing.
 
-**What does not work yet:** the other six experiences (placeholders — Spatial Panel is Phase 7),
+**What does not work yet:** the other five experiences (placeholders — Phase 7 Spatial Panel next after 6),
 Help/Settings panels (buttons only toggle state; settings live in the store with defaults), saving
 scenes (Phase 12), undo for moving the whole structure (Phase 6).
 
@@ -121,7 +125,11 @@ scenes (Phase 12), undo for moving the whole structure (Phase 6).
    (`voxel.defaultView`) feels right. A recording of them building (Debug → Record) would let us
    add a real-hand voxel regression test like `realHands.test.ts`. Earlier pending checks: Phase 4
    placeholders, lag feel (D30), Phase 3 gestures, main-user lock with a second person.
-6. **Order from here (D46): Phase 8 (Air Draw) → then Phase 6 → Phase 7 → 9…** Phase 6 is **Two-hand
+6. **Phase 8 (Air Draw) is DONE — ask for the user's real-hand check** too: pinch-draw a few lines
+   (smooth? does the line start where the dot was? trailing behind the finger acceptable?), colours
+   / widths / glow, eraser (pinch one stroke; hold and sweep over several), undo / Clear, resize the
+   window (strokes stay put). Pen smoothing is `draw.oneEuro` (tuned on their recordings, D47).
+7. **Order from here (D46): Phase 6 next, then Phase 7 → 9…** Phase 6 is **Two-hand
    transform core** (§7 below): extract the minimal two-hand
    transform in `modes/voxel/VoxelMode.ts` (`updateTwoHand`) into `modes/shared/TwoHandTransform.ts`
    with freeze-on-loss, per-frame clamps and a TransformObjectCommand (undoable). Stop and report.
@@ -233,6 +241,7 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D44 | **Voxel Builder choices** (§13): grid in voxelRoot-local integer cells, so alignment is exact under any transform; picking walks the occupancy grid (`raycastGrid`, Amanatides–Woo) through `VoxelPickTarget`, never raycasting instances; building uses whichever is nearer, a voxel face or the layer plane; a held pinch paints only once the aim is 0.5 voxel past the first cell (stationary pinch = 1 voxel), then with 0.15 hysteresis + Bresenham fill, on the plane it began on (edge-on planes follow voxel faces); a stroke is paint OR push/pull, whichever registers first (push/pull: 0.05 depth signal per voxel, untuned on real hands); default 3/4 view (tilt 0.28, turn −0.4 rad); Lambert shading (5,000 voxels 9 vs 18 ms/frame with PBR, Intel iGPU); the two-hand transform is a minimal in-mode version, not undoable, until Phase 6                                                                                    | Spec §13 leaves these open; each is tested or measured                                                        |
 | D45 | **Experience ↔ tool panel**: `ModeContext.publishUi(id, state)` → store `modeUi` (typed by `ModeUiStates` in `core/types.ts`, ≤ 10 Hz) → `ui/toolPanels.tsx`; buttons send a `ModeAction` (= `KeyAction` or `ToolAction`) via `bootstrap.modeAction` → `ModeController.handleAction` → `SpatialMode.onAction` (replaces `onKey`). `registry.BUILT_MODES` lists finished experiences (the panel hides the placeholder note for them). `ModeController.undo/redo` release captures first, so a half-done stroke is committed and becomes the step undone. Shared test rig: `tests/fixtures/modeHarness.ts` (`ModeRig`, `baseContext`)                                                                                                                                                                                                                                                                                                             | Modes only get ModeContext, but the UI must show and change their tools                                       |
 | D46 | **Phase order changed** (user, 2026-09-26): Phase 8 (Air Draw) is built next, before Phases 6 and 7, which come right after it. Phase 5's real-hand check is still pending — the user said "we will get back to this"; ask for it when they return to the Voxel Builder. Air Draw needs nothing from 6 / 7: it draws on the 2D overlay and uses pinch, the steady aim (D43) and undo history, which all exist                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | User's choice                                                                                                 | undefined |
+| D47 | **Air Draw choices** (§15): the pen is the steady-aim cursor (D43), stored in view units, widths in video heights, so strokes stay glued to the image through resizes; extra pen One Euro (minCutoff 2, beta 20) picked on the user's 43 real moving pinches: wiggle 1.3 / 8.4 px (median / p95) → 0.8 / 6.1, trailing 4.4 / 11 px; Catmull-Rom → Béziers on the 2D overlay; finished strokes cached offscreen and only the new stroke is added (~1.5 ms; erase / undo / resize repaint all: ~20 ms at 50 glowing strokes, ~90 at 200); glow = additive see-through passes, not shadowBlur (~250 ms repaint at 200 strokes); eraser removes every stroke touched while pinched, as one undo step, shown first with a red halo + dashed line; a quick second pinch takes the first stroke back (§11 rule 2)                                                                                                                                      | Spec §15 leaves these open; each is measured or tested                                                        | undefined |
 
 ---
 
@@ -306,7 +315,11 @@ Built as planned — see §9 and D43–D45. Every §13.9 criterion has a test (`
   mask, glowing handles), `modes/panel/PanelMode.ts`, content switcher, Reset. Sample images in
   `public/textures/`.
 
-### Phase 8 — Air Draw — spec §15
+### Phase 8 — Air Draw — spec §15 ✅ DONE (built before 6–7, D46)
+
+Built as planned — see §9 and D47. Accept checks: smoothness (end-to-end shake 1.78 → 0.34 px on
+jittery synthetic hands; real-pinch tuning in D47), resize alignment and the render cache are
+unit-tested (`tests/unit/draw.test.ts`, `tests/integration/airDraw.test.ts`). Plan for reference:
 
 - `modes/draw/DrawMode.ts` + `strokes.ts` (strokes stored view-normalised, `MIN_STROKE_STEP`,
   One Euro, Catmull-Rom render on the 2D overlay, 8 neon colours, 3 widths, glow toggle,
@@ -483,10 +496,19 @@ handleAction`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_MET
   `GhostVoxel` single cell / column, `BuildPlaneGrid`, `VoxelPickTarget` = the cursor target),
   `voxelMath` (`lineCells`, `raycastGrid`, `rayPlanePoint`, `inPlaneDistance`, `LayerDial`, cell
   helpers). Scene names used by tests: `Mode:voxel`, `Voxels:<material>`, `VoxelGhost`.
+- `src/modes/draw/` (Phase 8): `DrawMode` (pen = the steady-aim cursor, NDC → screen → view;
+  pen / eraser strokes each hold a capture; `strokeList`; publishes `DrawUiState`; draws in
+  `drawOverlay`), `strokes.ts` (`Stroke` immutable with Float32Array view-unit points + bounds;
+  `StrokeBuilder` min-step sampling + One Euro + live `tail` / `liveCount()`; `traceCatmullRom`
+  into any `PathSink`; `strokeHit` eraser test; `StrokeListCommand` = before / after list
+  snapshots; `StrokeRenderer` offscreen cache: append-only on a new stroke, full repaint on
+  erase / undo / resize; layered additive glow; eraser highlight; brush cursor).
+  `OverlayCanvas2D.pixelRatio` getter added for the cache.
 - Tests for experiences: `tests/fixtures/modeHarness.ts` (`ModeRig` drives a real ModeController
-  frame by frame with hand-made pinches / cursors; `baseContext()`); synthetic scenarios
-  `voxelStrokeScenario` / `voxelPullScenario` in `syntheticHands.ts`; `integration/voxelBuilder
-.test.ts` runs them through Core's per-frame steps.
+  frame by frame with hand-made pinches / cursors; `baseContext()`; `pipelineRig(mode)` = a
+  headless Core that plays hand recordings through Core's per-frame steps); synthetic scenarios
+  `pinchDragScenario` / `voxelPullScenario` in `syntheticHands.ts`; `integration/voxelBuilder
+.test.ts` and `integration/airDraw.test.ts` use `pipelineRig`.
 - `src/scene/materials.ts` — `addDefaultLighting` (used by SceneManager), `CursorMarker`,
   `setHighlight` (emissive glow).
 - `src/core/camera.ts` — `CameraManager` (state machine idle/requesting/running/stopped/error,
@@ -658,3 +680,12 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   `cacheDir` (e.g. `.cache/vite-analysis`), or the running dev server answers 504 "Outdated Optimize
   Dep" and MediaPipe fails to load until it is restarted. **Next:** user's Voxel Builder check
   (§3 step 5) → Phase 6.
+- **2026-09-26 — Session 2 (cont.). Phase order changed; Phase 8 — Air Draw built.** The user
+  paused the Phase 5 check ("we will get back to this") and asked for Air Draw next: recorded as
+  D46 (commit `5d10e95`). Built DrawMode + strokes (D47). Tuned the extra pen smoothing on the
+  user's 43 real moving pinches (wiggle vs trailing). Browser pane found canvas shadowBlur glow
+  far too slow (200 strokes: 253 ms to repaint) → layered additive glow + a cache that only adds
+  the new stroke; the first highlight washed thick strokes out → red halo + dashed line. Shared
+  `pipelineRig` extracted from the voxel end-to-end test; `voxelStrokeScenario` renamed
+  `pinchDragScenario`. Sabotage checks: no min step, no steady aim, or an always-appending cache
+  each fail a test. **Next:** user's Air Draw + Voxel checks → Phase 6.

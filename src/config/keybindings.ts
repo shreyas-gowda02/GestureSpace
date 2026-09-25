@@ -39,7 +39,7 @@ export const KEYBINDING_HELP: readonly { keys: string; action: string }[] = [
   { keys: '`', action: 'Debug panel' },
   { keys: 'Q / E', action: 'Depth − / +' },
   { keys: 'L', action: 'Depth lock' },
-  { keys: 'X', action: 'Build / erase' },
+  { keys: 'X', action: 'Build / erase (Voxel) · pen / eraser (Draw)' },
   { keys: '← / →  or  [ / ]', action: 'Filter prev / next' },
   { keys: 'Delete', action: 'Delete selection' },
   { keys: 'D', action: 'Duplicate' },

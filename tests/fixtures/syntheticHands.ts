@@ -182,12 +182,12 @@ const ramp = (t: number, from: number, seconds: number): number =>
   Math.min(1, Math.max(0, (t - from) / seconds));
 
 /**
- * Voxel Builder stroke: right hand pinches (0.6 s), holds still (to 1.4 s), drags right and a
- * little up while pinched (1.4–2.6 s), releases (3.0 s). Optional per-landmark jitter.
+ * Pinch + drag (Voxel Builder, Air Draw): right hand pinches (0.6 s), holds still (to 1.4 s),
+ * drags right and a little up while pinched (1.4–2.6 s), releases (3.0 s). Optional jitter.
  */
-export function voxelStrokeScenario(jitter = 0, seed = 1): LandmarkFixture {
+export function pinchDragScenario(jitter = 0, seed = 1): LandmarkFixture {
   const rng = makeRng(seed);
-  return scenario(`voxel-stroke${jitter ? '-jittery' : ''}`, 3.6, 30, (t) => {
+  return scenario(`pinch-drag${jitter ? '-jittery' : ''}`, 3.6, 30, (t) => {
     const k = ramp(t, 1.4, 1.2);
     return [
       rawHand('right', placeHand(poseAt(t, [[0, 'open'], [0.6, 'pinch'], [3.0, 'open']]), {
@@ -198,7 +198,7 @@ export function voxelStrokeScenario(jitter = 0, seed = 1): LandmarkFixture {
 }
 
 /**
- * Voxel Builder push / pull: right hand pinches (0.6 s) where voxelStrokeScenario starts, then
+ * Voxel Builder push / pull: right hand pinches (0.6 s) where pinchDragScenario starts, then
  * pulls toward the camera (palm ×1.4 over 1.2–2.2 s) keeping its pinch on the same spot — the hand
  * grows around the pinched fingertips, as when you reach toward something — releases (2.8 s).
  */

@@ -111,7 +111,8 @@ src/
   utils/      math.ts (scalar + vector helpers) · logger.ts
 tests/        unit/ · integration/ · e2e/
               fixtures/syntheticHands.ts (pose + scenario generator) · fixtures/landmarks/*.json
-              fixtures/modeHarness.ts (ModeRig: drive one experience frame by frame in tests)
+              fixtures/modeHarness.ts (ModeRig: drive one experience frame by frame; pipelineRig:
+              a headless Core that plays hand recordings into one experience)
               fixtures/landmarks/real/ (user's webcam recordings, replayed end to end by
               integration/realHands.test.ts — run it after any tracking/gesture change)
 scripts/      copy-mediapipe-assets.mjs · fetch-model.mjs · make-fixtures.ts (node runs TS)
