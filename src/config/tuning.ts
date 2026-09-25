@@ -200,14 +200,72 @@ export const TUNING = {
     /** Ring scale while pinching (feels like "grabbing"). */
     pinchScale: 0.65,
     hoverColor: '#ffffff',
+    /**
+     * Steady aim (D43). Closing a pinch slides the index tip toward the thumb, so once the pinch
+     * value drops below `freezeBelow` the aim moves rigidly with the hand (index knuckle) instead,
+     * returning to the fingertip over `blendMs` once it rises above `releaseAbove`. On the user's
+     * 104 real pinches, aim movement over the 250 ms before a pinch: fingertip 1.5 voxels median /
+     * 5.3 p95 → steady aim 0.4 / 3.1; drift while held: 0.5 / 4.0 → 0.3 / 2.5.
+     */
+    aim: { freezeBelow: 0.75, releaseAbove: 0.9, blendMs: 150 },
   },
 
   voxel: {
     defaultColor: '#21d4d8',
+    /** 8-colour palette (§13.1); the first is the default. */
+    palette: [
+      { name: 'Turquoise', hex: '#21d4d8' },
+      { name: 'Magenta', hex: '#ff3dcb' },
+      { name: 'Lime', hex: '#a6ff3d' },
+      { name: 'Amber', hex: '#ffb62e' },
+      { name: 'Coral', hex: '#ff5470' },
+      { name: 'Violet', hex: '#b36bff' },
+      { name: 'Blue', hex: '#4c7dff' },
+      { name: 'White', hex: '#f2f5fa' },
+    ],
     voxelSize: 1,
+    /** Cells per axis; layers and coordinates run from −worldBounds/2 to worldBounds/2 − 1. */
     worldBounds: 32,
+    /** Non-dominant pinch + vertical travel (view units) per layer step (§13.3 mechanism 4). */
     LAYER_STEP_DISTANCE: 0.06,
     initialInstanceCapacity: 256,
+    /**
+     * Resting orientation of the structure (radians): a gentle 3/4 view so top and side faces are
+     * visible — and pinchable for face extrusion — instead of only front faces. Reset view returns here.
+     */
+    defaultView: { tiltX: 0.28, turnY: -0.4 },
+    /**
+     * A held pinch paints further voxels only after the aim has moved this far (voxels) from where
+     * the pinch started, so a stationary pinch places exactly one voxel (§13.9).
+     */
+    paintDeadZone: 0.5,
+    /** After that, the aim must be this far (voxels) past a cell's edge to paint the next cell. */
+    cellHysteresis: 0.15,
+    /**
+     * Push / pull extrusion (§13.3 mechanism 3): depth-signal change since the pinch per voxel.
+     * Finer than the layer quantizer (depth.DEPTH_STEP): one step ≈ 8% change in hand size, so
+     * pulling a hand from ~60 to ~45 cm from the camera extrudes about 4 voxels. Not yet tuned on
+     * real hands.
+     */
+    extrude: { step: 0.05, hysteresis: 0.015, dwellMs: 100, deadZone: 0.02 },
+    /**
+     * A face stroke's locked plane seen more edge-on than this (|cos| between the view ray and the
+     * plane normal) gives unstable hits; the stroke then only follows voxel faces on that plane.
+     */
+    minPlaneFacing: 0.25,
+    /** Push/pull extrusion: faces turned further away from the camera than this grow on "push". */
+    awayFacing: -0.3,
+    /** Longest push/pull column (voxels). */
+    maxExtrude: 16,
+    /** Uniform scale limits for the whole structure (two-hand transform). */
+    rootScale: { min: 0.3, max: 3 },
+    materials: { glassOpacity: 0.38 },
+    /** Voxel edge shading: darker border on every face so cubes read clearly over video. */
+    edge: { texSize: 32, borderPx: 2, borderShade: 0.5 },
+    ghost: { opacity: 0.32, pulse: 0.14, pulseHz: 1.4, eraseColor: '#ff5470', edgeOpacity: 0.9 },
+    grid: { color: '#9fe8ff', opacity: 0.13, flashOpacity: 0.55, flashMs: 300 },
+    /** Tool-panel updates (voxel count while painting) are published at most this often. */
+    uiHz: 10,
   },
 
   scene: {

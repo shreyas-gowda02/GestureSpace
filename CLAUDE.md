@@ -38,8 +38,8 @@ gesture engine and ONE renderer. Everything runs locally; no backend, no uploads
 | 2     | Hand tracker                                                         | ✅ done — handedness fixed after user's real-hand test; awaiting re-check | `phase-2` commits    |
 | 3     | Smoothing + gestures + main-user lock (**M0** demo)                  | ✅ done — awaiting user's real-hand check                                 | `phase-3` commit     |
 | 4     | Spatial cursor + ModeController                                      | ✅ done — awaiting user's real-hand check                                 | `phase-4` commit     |
-| 5     | Voxel Builder (**M1** demo)                                          | ⏭ **next**                                                                | —                    |
-| 6     | Two-hand transform core                                              | ⬜                                                                        | —                    |
+| 5     | Voxel Builder (**M1** demo)                                          | ✅ done — awaiting user's real-hand check                                 | `phase-5` commit     |
+| 6     | Two-hand transform core                                              | ⏭ **next**                                                                | —                    |
 | 7     | Spatial Panel + Texture Surface                                      | ⬜                                                                        | —                    |
 | 8     | Air Draw                                                             | ⬜                                                                        | —                    |
 | 9     | Hand Strings                                                         | ⬜                                                                        | —                    |
@@ -81,10 +81,19 @@ hand's side comes from two confidence-weighted votes (MediaPipe's label + a 3D "
 crossed hands keep their names; a wrong side can be corrected mid-pinch and whatever the hand holds
 moves with it; a newly arrived hand is shown once its side is clear (≤ 250 ms). Verified end to end on
 the user's three real recordings (`tests/fixtures/landmarks/real/`, `realHands.test.ts`): 0 ms wrong
-side, 0 ms phantoms. The Debug panel shows both votes per hand. 140 tests passing.
+side, 0 ms phantoms. The Debug panel shows both votes per hand. **Phase 5 — Voxel Builder (M1):**
+pinch to place turquoise blocks on the active depth layer (faint grid) or on the face you point at;
+hold and move to paint gap-free lines; pinch a face and pull the hand closer to extrude a column;
+Depth Lock (on; L), layer via Q / E, ±Z buttons or non-dominant pinch + up/down; Build / Erase /
+Paint (X), 8 colours, solid / glass / glow; every stroke / extrusion / Clear is one undo step;
+two-hand pinch moves / turns / scales the structure; Reset view. Structures sit in a gentle 3/4
+view so top and side faces show. The cursor now uses a **steady aim** (D43): the voxel lands where
+the ghost showed it. Tool panel with all controls (D45). 5,000 voxels ≈ 63 FPS worst case on the
+Intel iGPU. 174 tests + 6 E2E passing.
 
-**What does not work yet:** the seven real experiences (placeholders only — Voxel Builder is next),
-Help/Settings panels (buttons only toggle state; settings live in the store with defaults).
+**What does not work yet:** the other six experiences (placeholders — Spatial Panel is Phase 7),
+Help/Settings panels (buttons only toggle state; settings live in the store with defaults), saving
+scenes (Phase 12), undo for moving the whole structure (Phase 6).
 
 **Pushed to GitHub:** yes — everything up to `ba40b4d` (lag fix) was pushed by the user on
 2026-09-24. Later commits: check with `git status` (the user pushes manually with `git push`).
@@ -103,14 +112,16 @@ Help/Settings panels (buttons only toggle state; settings live in the store with
    `friend-right.json` recording (another person's hand — the original trigger) to confirm the fix
    generalises; add it to `real/` and to `realHands.test.ts`. The lag is fixed too: 13.2 hand
    updates/s with two hands, the same as Phase 2 (D40 + D41).
-5. Ask the user about the Phase 4 real-hand check (3D cursor ring follows the fingertip; pinch the
-   placeholder shape and drag it; switch modes mid-drag; Leak check button). Earlier pending checks:
-   lag fix feel (D30) and Phase 3 gestures (pinch, fist, point, open
-   palm, thumb-pinky, two-hand pinch), steadiness when still, and the main-user lock with a second
-   person in view. Also ask for the Debug panel's inference Hz / ms. Tune thresholds in
-   `config/tuning.ts` from their feedback if needed.
-6. Then start **Phase 5 — Voxel Builder** (§7 below): replace the `voxel` placeholder factory in
-   `modes/registry.ts` with the real mode. Stop after it and report.
+5. **Phase 5 (Voxel Builder) is DONE — ask for the user's real-hand check**: stationary pinch =
+   one voxel where the ghost was; drag = gap-free line; face extrusion; push/pull (the step size
+   `voxel.extrude.step` is NOT yet tuned on real hands — ask how many voxels a comfortable pull
+   gives); layer dial with the non-dominant hand; two-hand move/turn/scale; whether the 3/4 view
+   (`voxel.defaultView`) feels right. A recording of them building (Debug → Record) would let us
+   add a real-hand voxel regression test like `realHands.test.ts`. Earlier pending checks: Phase 4
+   placeholders, lag feel (D30), Phase 3 gestures, main-user lock with a second person.
+6. Then start **Phase 6 — Two-hand transform core** (§7 below): extract the minimal two-hand
+   transform in `modes/voxel/VoxelMode.ts` (`updateTwoHand`) into `modes/shared/TwoHandTransform.ts`
+   with freeze-on-loss, per-frame clamps and a TransformObjectCommand (undoable). Stop and report.
 
 The user replies **"continue"** to approve moving to the next phase. Never start the next phase
 without that.
@@ -215,6 +226,9 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D40 | **Draws capped at 60 fps** (`TUNING.scene.maxRenderFps`, `FramePacer` in `core/renderLoop.ts`). Only `renderFrame()` is paced; tracking, gestures and modes still run every display frame, and the FPS counter counts draws. Root cause (2026-09-25, user's A/B recordings on a 144 Hz laptop, same camera 1 min apart): current code gave 9.2 / 6.2 hand updates/s with 1 / 2 hands vs Phase 2's 19.3 / 13.3. Since D38 the page redraws up to 144×/s on the same Intel iGPU MediaPipe uses (Phase 2's blocking inference paused drawing). Pane: drawing on → 35 ms per detection, off → 27 ms; 60 fps cap → 30/30 camera frames analysed (was 27, 3 skipped). User's re-recording: 6.2 → 10.1 hand updates/s with two hands. The second cause (`numHands: 4`) is fixed by D41                                                                                                                                                                 | User felt lag; A/B showed hand updates halved vs Phase 2                                                      |
 | D41 | **`numHands: 4` → `2`** (user's decision, 2026-09-25). MediaPipe skips its palm detector only once it tracks `numHands` hands, so 4 re-ran it on every frame (≈ 25 ms on the Intel iGPU) and produced phantom duplicate hands (10 of 421 detections). User's A/B on `f9e2673`, where only `numHands` differed: 10.1 → 13.2 hand updates/s with two hands (Phase 2: 13.3). The main-user lock logic stays and still vets the ≤ 2 hands it gets. Accepted trade-off: while one of the user's hands is out of view, a background hand can take the free slot until it leaves. If that bites, prototype switching 2 ↔ 4 at runtime with `HandLandmarker.setOptions({ numHands })` (switch cost unmeasured)                                                                                                                                                                                                                                          | User's A/B: 4 hands was the rest of the lag                                                                   |
 | D42 | **Which hand is which, by evidence** (§7c Layers 0–2, 2026-09-25; `TUNING.handedness`): phantom filter (drop the less confident of two detections whose boxes overlap > 0.15 IoU; user's data: phantoms ≥ 0.17, real hands ≤ 0.14); each hand sums two leaky, confidence-weighted votes, MediaPipe's label and the 3D thumb check `handChirality()` (signed volume of wrist → index / pinky MCP / thumb CMC, world landmarks; rotation-invariant), replacing D27 and D21's position rule (kept only for brand-new hands with no evidence); renames need margin 1.5, or 3 plus an agreeing 3D vote while a gesture holds, and SWAP slots (`takeSwap()` → gestures, two-hand angle, captures, depth, `SpatialMode.onSidesSwapped`); continuity penalises contradicting votes when both hands are tracked; new hands show once votes are clear or after 250 ms. Real recordings: wrong side 0 / 3.0 / 5.8 s → 0, phantoms 1.8 / 2.2 / 2.1 s → 0    | App side logic, not MediaPipe, made the errors                                                                |
+| D43 | **Steady aim** (`HandAim` in `spatial/CoordinateMapper.ts`, `TUNING.cursor.aim`): the cursor is the index fingertip while the hand is open; once the pinch value drops below 0.75 the aim keeps the tip's offset from the index knuckle (taken from the frame before, since the crossing frame's tip has already moved) and moves rigidly with the hand, the offset scaled with hand size; above 0.9 it blends back to the tip over 150 ms. On the user's 104 real pinches (2026-09-25): aim movement over the 250 ms before a pinch 1.5 → 0.4 voxels median (p95 5.3 → 3.1), drift while held 0.5 → 0.3 (p95 4.0 → 2.5). Every mode gets it (RaycastCursor); per-side state swaps on renames (D42). `voxelBuilder.test.ts` checks the voxel lands where the ghost was                                                                                                                                                                          | Closing a pinch slides the fingertip ~1.5 voxels: blocks landed away from their preview                       |
+| D44 | **Voxel Builder choices** (§13): grid in voxelRoot-local integer cells, so alignment is exact under any transform; picking walks the occupancy grid (`raycastGrid`, Amanatides–Woo) through `VoxelPickTarget`, never raycasting instances; building uses whichever is nearer, a voxel face or the layer plane; a held pinch paints only once the aim is 0.5 voxel past the first cell (stationary pinch = 1 voxel), then with 0.15 hysteresis + Bresenham fill, on the plane it began on (edge-on planes follow voxel faces); a stroke is paint OR push/pull, whichever registers first (push/pull: 0.05 depth signal per voxel, untuned on real hands); default 3/4 view (tilt 0.28, turn −0.4 rad); Lambert shading (5,000 voxels 9 vs 18 ms/frame with PBR, Intel iGPU); the two-hand transform is a minimal in-mode version, not undoable, until Phase 6                                                                                    | Spec §13 leaves these open; each is tested or measured                                                        |
+| D45 | **Experience ↔ tool panel**: `ModeContext.publishUi(id, state)` → store `modeUi` (typed by `ModeUiStates` in `core/types.ts`, ≤ 10 Hz) → `ui/toolPanels.tsx`; buttons send a `ModeAction` (= `KeyAction` or `ToolAction`) via `bootstrap.modeAction` → `ModeController.handleAction` → `SpatialMode.onAction` (replaces `onKey`). `registry.BUILT_MODES` lists finished experiences (the panel hides the placeholder note for them). `ModeController.undo/redo` release captures first, so a half-done stroke is committed and becomes the step undone. Shared test rig: `tests/fixtures/modeHarness.ts` (`ModeRig`, `baseContext`)                                                                                                                                                                                                                                                                                                             | Modes only get ModeContext, but the UI must show and change their tools                                       |
 
 ---
 
@@ -253,7 +267,11 @@ Built — see §9. Includes the main-user lock (D23). Original plan kept below f
 
 Built — see §9 and D31–D37. Leak check (10× all modes) verified flat in the browser pane.
 
-### Phase 5 — Voxel Builder (M1: "I can build 3D structures in the air") — spec §13
+### Phase 5 — Voxel Builder (M1: "I can build 3D structures in the air") — spec §13 ✅ DONE
+
+Built as planned — see §9 and D43–D45. Every §13.9 criterion has a test (`tests/unit/voxel.test.ts`,
+`tests/integration/voxelBuilder.test.ts`); 5,000 voxels measured in the browser pane (Intel iGPU,
+1600×900, forced GPU sync): 16 ms/frame as a solid block, 12.7 ms as walls. Plan kept for reference:
 
 - `modes/voxel/`: `VoxelMode.ts`, `VoxelGrid.ts` (Map occupancy + commands), `VoxelRenderer.ts`
   (InstancedMesh per material, growable capacity, ghost voxel, build-plane grid), `voxelMath.ts`
@@ -441,15 +459,30 @@ getCore`, UI actions (`startCamera`, `stopCamera`, `retryTracker`, `undo`, `redo
 - `src/spatial/CoordinateMapper.ts` — `CoordinateMapper` (view↔screen↔NDC, `worldToScreen`,
   `rayThrough`, `ndcToPlane`), `InteractionPlane` (`setZ`, `setThrough` camera-facing),
   `RaycastCursor` (`addTarget/removeTarget/clearTargets`; targets carry `userData.gsId` and optional
-  `gsKind: 'voxel'`; hit = first visible target else the plane; world face normal).
+  `gsKind: 'voxel'`; hit = first visible target else the plane; world face normal;
+  `update(hands, gestures)`, `swapSides()`), `HandAim` (steady aim per hand, D43 — the cursor's
+  screen/NDC is the aim point, not the raw fingertip).
 - `src/spatial/DepthEstimator.ts` — `StepQuantizer` (dead zone + hysteresis + dwell), `DepthEstimator`
   (`signal`, `steps`, `resetBaseline`). `src/spatial/CaptureManager.ts` — keys `left|right|twoHand`,
   `capture/get/isCaptured/release/releaseTarget/releaseAll/describe`, reasons released | lost |
   modeSwitch | ui | cancelled.
 - `src/modes/types.ts` (`ModeContext`, `SpatialMode`, `ModeFactory`), `src/modes/ModeController.ts`
   (`switchTo`, `update`, `render`, `drawOverlay`, `setUiCaptured`, `undo/redo/clear/resetView/
-handleKey`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_META` incl. `phase`,
-  `MODE_FACTORIES`), `src/modes/PlaceholderMode.ts`, `src/modes/shared/history.ts`.
+handleAction`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_META` incl. `phase`,
+  `MODE_FACTORIES`, `BUILT_MODES`), `src/modes/PlaceholderMode.ts`, `src/modes/shared/history.ts`.
+  `ModeContext.publishUi` + `ModeAction` / `SpatialMode.onAction` (D45); `ui/toolPanels.tsx`
+  (`ModeTools`: one component per built experience, reading `useAppStore((s) => s.modeUi.<id>)`).
+- `src/modes/voxel/` (Phase 5): `VoxelMode` (tools, strokes = `VoxelEdit` → one command, push/pull,
+  layer dial, Depth Lock, minimal two-hand transform `updateTwoHand`, publishes `VoxelUiState`;
+  `grid` is public), `VoxelGrid` (packed-key occupancy, `listener`, `VoxelEdit`, `VoxelEditCommand`,
+  `clearCommand`), `VoxelRenderer` (`InstanceBatch` per material with capacity doubling,
+  `GhostVoxel` single cell / column, `BuildPlaneGrid`, `VoxelPickTarget` = the cursor target),
+  `voxelMath` (`lineCells`, `raycastGrid`, `rayPlanePoint`, `inPlaneDistance`, `LayerDial`, cell
+  helpers). Scene names used by tests: `Mode:voxel`, `Voxels:<material>`, `VoxelGhost`.
+- Tests for experiences: `tests/fixtures/modeHarness.ts` (`ModeRig` drives a real ModeController
+  frame by frame with hand-made pinches / cursors; `baseContext()`); synthetic scenarios
+  `voxelStrokeScenario` / `voxelPullScenario` in `syntheticHands.ts`; `integration/voxelBuilder
+.test.ts` runs them through Core's per-frame steps.
 - `src/scene/materials.ts` — `addDefaultLighting` (used by SceneManager), `CursorMarker`,
   `setHighlight` (emissive glow).
 - `src/core/camera.ts` — `CameraManager` (state machine idle/requesting/running/stopped/error,
@@ -609,3 +642,15 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   `realHands.test.ts` (sabotage-checked: fails without the 3D vote or the phantom filter).
   Verified in the browser pane by stepping `core['frame']` through the crossing recording.
   **Next:** optional friend recording → then Phase 5 (Voxel Builder).
+- **2026-09-25 — Session 2 (cont.). Phase 5 — Voxel Builder built.** Before designing placement,
+  measured the user's 104 real pinches: closing a pinch slides the index tip ~1.5 voxels, so blocks
+  would land away from the ghost → steady aim (D43; A/B'd variants on the recordings, freezing the
+  offset from the frame before the threshold matched the best prototype). Built grid / renderer /
+  math / mode / tool panel (D44, D45). A trace of a synthetic push/pull showed the aim drifting as
+  the hand grew → the frozen offset now scales with hand size. 5,000 voxels: 25 → 16 ms/frame after
+  switching PBR → Lambert (browser pane, Intel iGPU, forced sync). Leak check flat (14 geo / 2 tex).
+  Sabotage checks: removing the dead zone, the line fill, the steady aim or the offset scaling each
+  fails a test. Gotcha: analysis scripts that start their own Vite server must use a separate
+  `cacheDir` (e.g. `.cache/vite-analysis`), or the running dev server answers 504 "Outdated Optimize
+  Dep" and MediaPipe fails to load until it is restarted. **Next:** user's Voxel Builder check
+  (§3 step 5) → Phase 6.

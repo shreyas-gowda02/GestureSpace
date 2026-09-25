@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import type { CameraError, CameraState } from '@/core/camera';
 import { DEFAULT_SETTINGS } from '@/config/tuning';
-import type { ModeId, Settings } from '@/core/types';
+import type { ModeId, ModeUiStates, Settings } from '@/core/types';
 import type { TrackerDelegate, TrackerStatus } from '@/vision/HandTracker';
 
 export type CameraStatus = CameraState;
@@ -21,6 +21,8 @@ export interface AppState {
   statusText: string;
   /** Short message from the active experience (emitStatus), e.g. "Panel captured". */
   modeStatus: string;
+  /** Tool-panel state each experience publishes (layer, tool, colour…), ≤ 10 Hz. */
+  modeUi: Partial<ModeUiStates>;
   settings: Settings;
   fps: number;
   toolPanelOpen: boolean;
@@ -36,6 +38,7 @@ export interface AppState {
   setHandCount(count: number): void;
   setStatusText(text: string): void;
   setModeStatus(text: string): void;
+  setModeUi<K extends keyof ModeUiStates>(id: K, state: ModeUiStates[K]): void;
   updateSettings(patch: Partial<Settings>): void;
   setHistory(canUndo: boolean, canRedo: boolean): void;
   setFps(fps: number): void;
@@ -56,6 +59,7 @@ export const useAppStore = create<AppState>()((set) => ({
   handCount: 0,
   statusText: 'Right: — · Left: —',
   modeStatus: '',
+  modeUi: {},
   settings: DEFAULT_SETTINGS,
   fps: 0,
   toolPanelOpen: true,
@@ -72,6 +76,7 @@ export const useAppStore = create<AppState>()((set) => ({
   setHandCount: (handCount) => set({ handCount }),
   setStatusText: (statusText) => set({ statusText }),
   setModeStatus: (modeStatus) => set({ modeStatus }),
+  setModeUi: (id, state) => set((s) => ({ modeUi: { ...s.modeUi, [id]: state } })),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
   setHistory: (canUndo, canRedo) => set({ canUndo, canRedo }),
   setFps: (fps) => set({ fps }),

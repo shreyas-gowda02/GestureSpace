@@ -2,10 +2,15 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import type { HandFrame, TrackedHand, Vec3 } from '@/core/types';
 import { CaptureManager } from '@/spatial/CaptureManager';
-import { CoordinateMapper, InteractionPlane, RaycastCursor } from '@/spatial/CoordinateMapper';
+import {
+  CoordinateMapper,
+  HandAim,
+  InteractionPlane,
+  RaycastCursor,
+} from '@/spatial/CoordinateMapper';
 import { DepthEstimator, StepQuantizer } from '@/spatial/DepthEstimator';
 import { ViewportMapper } from '@/spatial/ViewportMapper';
-import { INDEX_TIP, makeLandmarkBuffer } from '@/vision/landmarks';
+import { INDEX_MCP, INDEX_TIP, makeLandmarkBuffer } from '@/vision/landmarks';
 
 /** 1280×720 video in a 1280×720 view, default camera at z = 20 looking down −Z. */
 function setup() {
@@ -109,6 +114,61 @@ describe('RaycastCursor', () => {
     const s = coords.worldToScreen(hit ?? { x: 0, y: 0, z: 0 }, { x: 0, y: 0 });
     expect(s.x).toBeCloseTo(0.25 * 1280, 0);
     expect(s.y).toBeCloseTo(0.8 * 720, 0);
+  });
+});
+
+describe('HandAim: steady aim while pinching (D43)', () => {
+  it('follows the tip when open, ignores the finger curling into a pinch, moves with the hand', () => {
+    const aim = new HandAim();
+    const hand = handAt(0, 0);
+    const lms = hand.landmarks as Vec3[];
+    const set = (tipY: number, x = 0.5): void => {
+      lms[INDEX_TIP] = { x, y: tipY, z: 0 };
+      lms[INDEX_MCP] = { x, y: 0.45, z: 0 };
+    };
+    const at = (v: number, now: number): { x: number; y: number } => {
+      const p = aim.update(hand, v, now);
+      return { x: Math.round(p.x * 1e6) / 1e6, y: Math.round(p.y * 1e6) / 1e6 };
+    };
+    set(0.3);
+    expect(at(1.2, 0)).toEqual({ x: 0.5, y: 0.3 }); // open hand: the fingertip
+    set(0.32);
+    // Closing: frozen with the offset from before this tracker update moved the tip.
+    expect(at(0.7, 16)).toEqual({ x: 0.5, y: 0.3 });
+    set(0.38);
+    expect(at(0.3, 33)).toEqual({ x: 0.5, y: 0.3 }); // the tip curls on, the aim stays
+    set(0.38, 0.6);
+    expect(at(0.3, 50)).toEqual({ x: 0.6, y: 0.3 }); // the whole hand moves: the aim follows
+    set(0.28, 0.6);
+    expect(at(1.0, 66)).toEqual({ x: 0.6, y: 0.3 }); // reopened: blends back to the tip…
+    expect(at(1.0, 66 + 75)).toEqual({ x: 0.6, y: 0.29 });
+    expect(at(1.0, 66 + 150)).toEqual({ x: 0.6, y: 0.28 }); // …over aim.blendMs
+    expect(at(1.0, 400)).toEqual({ x: 0.6, y: 0.28 });
+  });
+
+  it('pulling the hand closer while pinched keeps the aim on the same spot (offset scales)', () => {
+    const aim = new HandAim();
+    const hand = handAt(0, 0);
+    const lms = hand.landmarks as Vec3[];
+    lms[INDEX_TIP] = { x: 0.5, y: 0.3, z: 0 };
+    lms[INDEX_MCP] = { x: 0.5, y: 0.45, z: 0 };
+    aim.update(hand, 1.2, 0);
+    aim.update(hand, 0.3, 16); // frozen
+    // The hand grows ×1.5 around the aimed spot, so the knuckle moves away from it.
+    lms[INDEX_MCP] = { x: 0.5, y: 0.525, z: 0 };
+    const p = aim.update({ ...hand, palmScale: hand.palmScale * 1.5 }, 0.3, 33);
+    expect(p.x).toBeCloseTo(0.5);
+    expect(p.y).toBeCloseTo(0.3);
+  });
+
+  it('without pinch data (or after the hand is lost) the aim is just the fingertip', () => {
+    const aim = new HandAim();
+    const hand = handAt(0.2, 0.7);
+    expect(aim.update(hand, undefined, 0)).toMatchObject({ x: 0.2, y: 0.7 });
+    aim.update(hand, 0.2, 16);
+    aim.reset();
+    (hand.landmarks as Vec3[])[INDEX_TIP] = { x: 0.4, y: 0.4, z: 0 };
+    expect(aim.update(hand, undefined, 32)).toMatchObject({ x: 0.4, y: 0.4 });
   });
 });
 

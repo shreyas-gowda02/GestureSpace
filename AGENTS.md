@@ -86,7 +86,7 @@ src/
   gestures/   GestureEngine.ts (P3: engine + precedence) · stateMachine.ts (P3)
               detectors.ts (P3: pinch, point, grab, openPalm, thumbPinky, swipe) · twoHand.ts (P3)
   spatial/    ViewportMapper.ts (P1: cover-crop + mirror) · CoordinateMapper.ts (P4: + raycast cursor,
-              interaction plane) · DepthEstimator.ts (P4) · CaptureManager.ts (P4)
+              interaction plane; P5: HandAim steady aim) · DepthEstimator.ts (P4) · CaptureManager.ts (P4)
   scene/      SceneManager.ts (P1: renderer, camera, dispose helpers)
               CameraBackground.ts (P1) · overlay.ts (P2/P3: OverlayCanvas2D, skeleton, gesture HUD)
               materials.ts (P4: lighting, CursorMarker, highlight; P11 selection outline)
@@ -104,12 +104,14 @@ src/
     objectLab/ ObjectLabMode.ts · objects.ts (primitives, commands, transform)   (P11)
   ui/         AppShell.tsx (top bar, tool panel, status bar) · ModeDock.tsx (+ icons) · styles.css
               PermissionScreen.tsx (P1) · DebugPanel.tsx (P2) · GestureStatus (P3, in AppShell)
-              overlays.tsx (P12: Help, Settings, Onboarding) · toolPanels.tsx (per-mode controls)
+              overlays.tsx (P12: Help, Settings, Onboarding) · toolPanels.tsx (P5: per-mode controls,
+              fed by ModeContext.publishUi → store modeUi; buttons send ModeActions)
   state/      appStore.ts (UI-only zustand) · persistence.ts (P12: settings, scenes, serializers)
   workers/    visionWorker.ts (HandLandmarker off the main thread)
   utils/      math.ts (scalar + vector helpers) · logger.ts
 tests/        unit/ · integration/ · e2e/
               fixtures/syntheticHands.ts (pose + scenario generator) · fixtures/landmarks/*.json
+              fixtures/modeHarness.ts (ModeRig: drive one experience frame by frame in tests)
               fixtures/landmarks/real/ (user's webcam recordings, replayed end to end by
               integration/realHands.test.ts — run it after any tracking/gesture change)
 scripts/      copy-mediapipe-assets.mjs · fetch-model.mjs · make-fixtures.ts (node runs TS)
@@ -204,7 +206,8 @@ interface Command {
 ```
 
 `ModeContext` gives modes: scene, camera, renderer, overlay, videoTexture, viewport, coords,
-cursors, capture, history, settings, emitStatus. Modes get nothing else.
+cursors, capture, history, settings, emitStatus, publishUi (tool-panel state). Modes get nothing
+else. Keys and tool-panel buttons reach the active mode as `ModeAction`s via `onAction`.
 
 ## Commands
 

@@ -20,11 +20,13 @@ import type {
   HandSide,
   InteractionFrame,
   ModeId,
+  ModeUiStates,
   Settings,
 } from '@/core/types';
 import { describeHand, GestureEngine, perceptionStep } from '@/gestures/GestureEngine';
 import { ModeController } from '@/modes/ModeController';
 import { MODE_FACTORIES } from '@/modes/registry';
+import type { ModeAction } from '@/modes/types';
 import { CameraBackground } from '@/scene/CameraBackground';
 import { CursorMarker } from '@/scene/materials';
 import { drawGestureIndicators, drawHandSkeleton, OverlayCanvas2D } from '@/scene/overlay';
@@ -154,6 +156,8 @@ export class Core {
         capture: this.capture,
         settings: this.settings,
         emitStatus: this.emitStatus,
+        publishUi: <K extends keyof ModeUiStates>(id: K, state: ModeUiStates[K]) =>
+          useAppStore.getState().setModeUi(id, state),
       },
       MODE_FACTORIES,
     );
@@ -280,10 +284,15 @@ export class Core {
         return true;
       case 'escape':
         this.capture.releaseAll('cancelled');
-        return this.modes.handleKey(action) || true;
+        return this.modes.handleAction(action) || true;
       default:
-        return this.modes.handleKey(action);
+        return this.modes.handleAction(action);
     }
+  }
+
+  /** A tool-panel button of the active experience. */
+  modeAction(action: ModeAction): boolean {
+    return this.modes.handleAction(action);
   }
 
   /** Replay recorded landmarks through the full pipeline (works with or without a camera). */
@@ -409,8 +418,9 @@ export class Core {
       if (g) g.depthSignal = d;
     }
 
-    // 4. Scene cursors; a lost hand drops whatever it held (§10 grace → force release).
-    this.cursors.update(hands);
+    // 4. Scene cursors (aim steadied while pinching, D43); a lost hand drops whatever it held
+    //    (§10 grace → force release).
+    this.cursors.update(hands, gestures);
     for (const side of SIDES) if (!hands[side]) this.capture.release(side, 'lost');
     if (!hands.left || !hands.right) this.capture.release('twoHand', 'lost');
 
@@ -441,6 +451,7 @@ export class Core {
     this.depth.left = right;
     this.depth.right = left;
     this.capture.swapSides();
+    this.cursors.swapSides();
     this.modes.swapSides();
     log.debug('left/right renamed');
   }

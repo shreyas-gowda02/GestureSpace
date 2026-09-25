@@ -3,7 +3,14 @@
 
 import type * as THREE from 'three';
 import type { KeyAction } from '@/config/keybindings';
-import type { InteractionFrame, ModeId, Settings } from '@/core/types';
+import type {
+  InteractionFrame,
+  ModeId,
+  ModeUiStates,
+  Settings,
+  VoxelMaterial,
+  VoxelTool,
+} from '@/core/types';
 import type { OverlayCanvas2D } from '@/scene/overlay';
 import type { CaptureManager } from '@/spatial/CaptureManager';
 import type { CoordinateMapper, RaycastCursor } from '@/spatial/CoordinateMapper';
@@ -26,7 +33,17 @@ export interface ModeContext {
   settings: Readonly<Settings>;
   /** Short status for the status bar, e.g. "Panel captured". Cheap to call every frame. */
   emitStatus(text: string): void;
+  /** Tool-panel state (layer, tool, colour…). Call on change only, at most ~10 Hz. */
+  publishUi<K extends keyof ModeUiStates>(id: K, state: ModeUiStates[K]): void;
 }
+
+/** Tool-panel buttons for the active experience (keys arrive as KeyActions through the same door). */
+export type ToolAction =
+  | { type: 'voxelTool'; tool: VoxelTool }
+  | { type: 'voxelColor'; color: string }
+  | { type: 'voxelMaterial'; material: VoxelMaterial };
+
+export type ModeAction = KeyAction | ToolAction;
 
 export interface SpatialMode {
   readonly id: ModeId;
@@ -41,8 +58,8 @@ export interface SpatialMode {
   reset(): void;
   /** Reset transform / view ("Reset" button / R). */
   resetView?(): void;
-  /** Mode-specific keys (depth, tools, filters…). Return true if handled. */
-  onKey?(action: KeyAction): boolean;
+  /** Mode-specific keys and tool-panel buttons (depth, tools, filters…). Return true if handled. */
+  onAction?(action: ModeAction): boolean;
   /**
    * The tracker corrected which hand is which (D42): any side the mode stored (e.g. "held by the
    * right hand") now refers to the other hand. Captures have already been moved.

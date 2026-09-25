@@ -12,11 +12,12 @@ import {
   stopCamera,
   undo,
 } from '@/app/bootstrap';
-import { MODE_META } from '@/modes/registry';
+import { BUILT_MODES, MODE_META } from '@/modes/registry';
 import { useAppStore, type CameraStatus } from '@/state/appStore';
 import { DebugPanel } from './DebugPanel';
 import { ModeDock } from './ModeDock';
 import { PermissionScreen, TrackerNotice } from './PermissionScreen';
+import { ModeTools } from './toolPanels';
 
 const CAMERA_LABEL: Record<CameraStatus, string> = {
   idle: 'Camera off',
@@ -84,7 +85,7 @@ function TopBar() {
   );
 }
 
-/** Right-hand per-mode tool panel (collapsible). Mode-specific controls land with each mode. */
+/** Right-hand per-mode tool panel (collapsible): the experience's controls + its gestures. */
 function ToolPanel() {
   const activeMode = useAppStore((s) => s.activeMode);
   const open = useAppStore((s) => s.toolPanelOpen);
@@ -108,10 +109,15 @@ function ToolPanel() {
       {open && (
         <div className="gs-toolpanel__body">
           <h2 className="gs-toolpanel__heading">{meta.name}</h2>
-          <p className="gs-muted">
-            Preview: a placeholder shape you can pinch and drag. The full experience and its tools
-            arrive in Phase {meta.phase}.
-          </p>
+          {BUILT_MODES.has(activeMode) ? (
+            <p className="gs-muted">{meta.tagline}</p>
+          ) : (
+            <p className="gs-muted">
+              Preview: a placeholder shape you can pinch and drag. The full experience and its tools
+              arrive in Phase {meta.phase}.
+            </p>
+          )}
+          <ModeTools mode={activeMode} />
           <h3 className="gs-toolpanel__sub">Gestures</h3>
           <ul className="gs-helplist">
             {meta.help.map((h) => (

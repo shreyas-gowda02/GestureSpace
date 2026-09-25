@@ -147,3 +147,24 @@ export interface InteractionFrame {
 
 // NOTE: ModeContext and SpatialMode (§7) reference Three.js and core classes that land in
 // Phases 1–4; they are added in src/modes/types.ts in Phase 4.
+
+// ---------- Tool-panel state published by experiences (low frequency, ≤ 10 Hz) ----------
+
+export type VoxelTool = 'build' | 'erase' | 'paint';
+export type VoxelMaterial = 'solid' | 'glass' | 'emissive';
+
+export interface VoxelUiState {
+  tool: VoxelTool;
+  /** '#rrggbb' */
+  color: string;
+  material: VoxelMaterial;
+  /** Active build layer (integer Z). */
+  layer: number;
+  depthLock: boolean;
+  count: number;
+}
+
+/** Per experience: what its tool panel shows. Grows as experiences land. */
+export interface ModeUiStates {
+  voxel: VoxelUiState;
+}

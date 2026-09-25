@@ -692,6 +692,103 @@ kbd {
   color: var(--gs-text-muted);
 }
 
+.gs-toolpanel__sub kbd,
+.gs-depthlock kbd {
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--gs-glass-border);
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--gs-text-muted);
+}
+
+/* Per-experience controls (ui/toolPanels.tsx) */
+.gs-segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 6px;
+}
+
+.gs-segmented .gs-btn {
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+.gs-swatches {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.gs-swatch {
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  transition: transform var(--gs-dur) var(--gs-ease);
+}
+
+.gs-swatch:hover {
+  transform: scale(1.08);
+}
+
+.gs-swatch[aria-pressed='true'] {
+  border-color: var(--gs-text);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
+}
+
+.gs-depth {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gs-depth__step {
+  flex: none;
+  padding: 0 8px;
+  font-family: var(--gs-mono);
+}
+
+.gs-depth__scale {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--gs-mono);
+  font-size: 11px;
+  color: var(--gs-text-dim);
+}
+
+.gs-depth__scale li {
+  min-width: 18px;
+  text-align: center;
+}
+
+.gs-depth__scale li.is-active {
+  padding: 2px 3px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--gs-bg);
+  background: var(--gs-accent);
+}
+
+.gs-depthlock {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.gs-toolpanel__count {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+
 /* ---------- Status bar ---------- */
 .gs-statusbar {
   left: var(--gs-gap);

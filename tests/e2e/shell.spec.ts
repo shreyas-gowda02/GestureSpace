@@ -72,3 +72,39 @@ test('switching through all seven experiences never duplicates the core or rende
   expect(counters?.renderersCreated).toBe(1);
   expect(counters?.modeSwitches).toBeGreaterThanOrEqual(8);
 });
+
+test('voxel tools: keys and buttons drive the depth layer, tool, colour and Depth Lock', async ({
+  page,
+}) => {
+  await openApp(page);
+  const tools = page.getByLabel('Voxel Builder tools');
+  const depth = tools.getByLabel(/Active depth layer/);
+  await expect(depth).toHaveAttribute('aria-label', 'Active depth layer 0');
+  await page.keyboard.press('e');
+  await page.keyboard.press('e');
+  await page.keyboard.press('q');
+  await expect(depth).toHaveAttribute('aria-label', 'Active depth layer +1');
+  await tools.getByRole('button', { name: 'Depth layer down (Q)' }).click();
+  await tools.getByRole('button', { name: 'Depth layer down (Q)' }).click();
+  await expect(depth).toHaveAttribute('aria-label', 'Active depth layer −1');
+
+  await page.keyboard.press('x');
+  await expect(tools.getByRole('button', { name: 'Erase' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await tools.getByRole('button', { name: 'Paint' }).click();
+  await expect(tools.getByRole('button', { name: 'Paint' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await tools.getByRole('button', { name: 'Magenta' }).click();
+  await expect(tools.getByRole('button', { name: 'Magenta' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+
+  await page.keyboard.press('l');
+  await expect(tools.getByRole('button', { name: /Depth Lock off/ })).toBeVisible();
+  await expect(tools).toContainText('0 voxels');
+});

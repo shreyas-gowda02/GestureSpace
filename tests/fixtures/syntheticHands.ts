@@ -178,6 +178,45 @@ export function pinchScenario(jitter = 0, seed = 1): LandmarkFixture {
   ]);
 }
 
+const ramp = (t: number, from: number, seconds: number): number =>
+  Math.min(1, Math.max(0, (t - from) / seconds));
+
+/**
+ * Voxel Builder stroke: right hand pinches (0.6 s), holds still (to 1.4 s), drags right and a
+ * little up while pinched (1.4–2.6 s), releases (3.0 s). Optional per-landmark jitter.
+ */
+export function voxelStrokeScenario(jitter = 0, seed = 1): LandmarkFixture {
+  const rng = makeRng(seed);
+  return scenario(`voxel-stroke${jitter ? '-jittery' : ''}`, 3.6, 30, (t) => {
+    const k = ramp(t, 1.4, 1.2);
+    return [
+      rawHand('right', placeHand(poseAt(t, [[0, 'open'], [0.6, 'pinch'], [3.0, 'open']]), {
+        side: 'right', wristX: 0.42 - 0.16 * k, wristY: 0.78 - 0.04 * k, palm: 0.16, jitter, rng,
+      })),
+    ];
+  });
+}
+
+/**
+ * Voxel Builder push / pull: right hand pinches (0.6 s) where voxelStrokeScenario starts, then
+ * pulls toward the camera (palm ×1.4 over 1.2–2.2 s) keeping its pinch on the same spot — the hand
+ * grows around the pinched fingertips, as when you reach toward something — releases (2.8 s).
+ */
+export function voxelPullScenario(): LandmarkFixture {
+  const [tx, ty] = POSES.pinch[8] ?? [0, 0]; // index tip, palm units from the wrist
+  const palm0 = 0.16;
+  const tipX = 0.42 + (tx * palm0) / ASPECT;
+  const tipY = 0.78 + ty * palm0;
+  return scenario('voxel-pull', 3.4, 30, (t) => {
+    const palm = palm0 * (1 + 0.4 * ramp(t, 1.2, 1.0));
+    return [
+      rawHand('right', placeHand(poseAt(t, [[0, 'open'], [0.6, 'pinch'], [2.8, 'open']]), {
+        side: 'right', wristX: tipX - (tx * palm) / ASPECT, wristY: tipY - ty * palm, palm,
+      })),
+    ];
+  });
+}
+
 /** Right hand cycles every single-hand gesture (for detector + status tests / demos). */
 export function gestureTourScenario(): LandmarkFixture {
   const keys = [

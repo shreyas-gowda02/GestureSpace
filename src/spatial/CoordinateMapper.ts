@@ -1,11 +1,20 @@
 // Coordinate spaces (§8) beyond the video crop: view-normalized ↔ screen (CSS px) ↔ NDC ↔ scene.
-// Also the virtual InteractionPlane and the per-hand RaycastCursor (index fingertip → scene hit).
+// Also the virtual InteractionPlane and the per-hand RaycastCursor (steady aim point → scene hit).
 // Only this file and ViewportMapper convert between spaces.
 
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
-import type { CursorHitKind, HandFrame, HandSide, SceneCursor, Vec2, Vec3 } from '@/core/types';
-import { INDEX_TIP } from '@/vision/landmarks';
+import type {
+  CursorHitKind,
+  GestureFrame,
+  HandFrame,
+  HandSide,
+  SceneCursor,
+  TrackedHand,
+  Vec2,
+  Vec3,
+} from '@/core/types';
+import { INDEX_MCP, INDEX_TIP } from '@/vision/landmarks';
 import type { ViewportMapper } from './ViewportMapper';
 
 export interface ViewSize {
@@ -102,9 +111,94 @@ function makeCursor(side: HandSide): SceneCursor {
 }
 
 /**
- * Per-hand scene cursor: the INDEX fingertip is projected to the screen, a ray is cast from the
- * camera through it, and the first hit among the registered targets — else the interaction plane —
- * becomes the cursor's scene point. Targets carry `userData.gsId` (and optional `gsKind`).
+ * Where one hand aims (D43), view-normalized: the index fingertip while the hand is open. Closing a
+ * pinch slides the tip toward the thumb, so below `aim.freezeBelow` the aim keeps the tip's last
+ * offset from the index knuckle and moves rigidly with the hand; above `aim.releaseAbove` it blends
+ * back to the fingertip. Result: what the cursor showed before a pinch is where the pinch acts.
+ * The frozen offset scales with the hand's apparent size, so pulling the hand toward the camera
+ * (push / pull extrusion) keeps the aim on the fingertip instead of drifting with the knuckle.
+ */
+export class HandAim {
+  readonly point: Vec2 = { x: 0, y: 0 };
+  private has = false;
+  private frozen = false;
+  /** Offset (tip − knuckle) at the freeze — or where the blend back starts after a release. */
+  private offX = 0;
+  private offY = 0;
+  /** Palm scale when the offset froze. */
+  private palm = 1;
+  private releasedAt = -1;
+  /** Offset and palm scale in effect on the previous frame. */
+  private lastX = 0;
+  private lastY = 0;
+  private lastPalm = 1;
+
+  update(hand: TrackedHand, pinchValue: number | undefined, now: number): Vec2 {
+    const tip = hand.landmarks[INDEX_TIP];
+    const knuckle = hand.landmarks[INDEX_MCP];
+    if (!tip || !knuckle) return this.point;
+    const liveX = tip.x - knuckle.x;
+    const liveY = tip.y - knuckle.y;
+    const a = TUNING.cursor.aim;
+    const v = pinchValue ?? Infinity;
+    const palm = hand.palmScale > 0 ? hand.palmScale : 1;
+    if (!this.has) {
+      this.has = true;
+      this.frozen = false;
+      this.releasedAt = -1;
+      this.lastX = liveX;
+      this.lastY = liveY;
+      this.lastPalm = palm;
+    }
+    let x = liveX;
+    let y = liveY;
+    if (this.frozen) {
+      const k = palm / this.palm;
+      x = this.offX * k;
+      y = this.offY * k;
+      if (v > a.releaseAbove) {
+        this.frozen = false;
+        this.releasedAt = now; // blend from here back to the live fingertip
+        this.offX = x;
+        this.offY = y;
+      }
+    } else if (this.releasedAt >= 0) {
+      const t = (now - this.releasedAt) / a.blendMs;
+      if (t >= 1 || t < 0) this.releasedAt = -1;
+      else {
+        x = this.offX + (liveX - this.offX) * t;
+        y = this.offY + (liveY - this.offY) * t;
+      }
+    }
+    if (!this.frozen && v < a.freezeBelow) {
+      // Freeze the offset from the previous frame: by the frame the pinch value crosses the
+      // threshold, the tip has already moved one tracker update toward the thumb.
+      this.frozen = true;
+      this.releasedAt = -1;
+      this.offX = x = this.lastX;
+      this.offY = y = this.lastY;
+      this.palm = this.lastPalm;
+    }
+    this.lastX = x;
+    this.lastY = y;
+    this.lastPalm = palm;
+    this.point.x = knuckle.x + x;
+    this.point.y = knuckle.y + y;
+    return this.point;
+  }
+
+  reset(): void {
+    this.has = false;
+    this.frozen = false;
+    this.releasedAt = -1;
+  }
+}
+
+/**
+ * Per-hand scene cursor: the hand's aim point (index fingertip, steadied while pinching — D43) is
+ * projected to the screen, a ray is cast from the camera through it, and the first hit among the
+ * registered targets — else the interaction plane — becomes the cursor's scene point. Targets carry
+ * `userData.gsId` (and optional `gsKind`).
  */
 export class RaycastCursor {
   readonly cursors: { left?: SceneCursor; right?: SceneCursor } = {};
@@ -116,6 +210,8 @@ export class RaycastCursor {
     left: makeCursor('left'),
     right: makeCursor('right'),
   };
+  /** Swapped with the hand when left ↔ right are renamed (D42). */
+  private aims: Record<HandSide, HandAim> = { left: new HandAim(), right: new HandAim() };
   private readonly hitStore: Record<HandSide, CursorHit> = {
     left: { point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 0 }, kind: 'plane' },
     right: { point: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 0, z: 0 }, kind: 'plane' },
@@ -145,18 +241,34 @@ export class RaycastCursor {
     this.targets.length = 0;
   }
 
-  update(hands: HandFrame): { left?: SceneCursor; right?: SceneCursor } {
-    this.cursors.left = this.updateSide('left', hands);
-    this.cursors.right = this.updateSide('right', hands);
+  /** `gestures` (pinch values) steady the aim while pinching; without them the aim is the tip. */
+  update(hands: HandFrame, gestures?: GestureFrame): { left?: SceneCursor; right?: SceneCursor } {
+    this.cursors.left = this.updateSide('left', hands, gestures);
+    this.cursors.right = this.updateSide('right', hands, gestures);
     return this.cursors;
   }
 
-  private updateSide(side: HandSide, hands: HandFrame): SceneCursor | undefined {
+  /** Left ↔ right were renamed (D42): each aim's pinch state follows its physical hand. */
+  swapSides(): void {
+    this.aims = { left: this.aims.right, right: this.aims.left };
+  }
+
+  private updateSide(
+    side: HandSide,
+    hands: HandFrame,
+    gestures: GestureFrame | undefined,
+  ): SceneCursor | undefined {
     const hand = hands[side];
-    const tip = hand?.landmarks[INDEX_TIP];
-    if (!hand || !tip) return undefined;
+    const aim = this.aims[side];
+    if (!hand) {
+      aim.reset();
+      return undefined;
+    }
     const c = this.store[side];
-    this.coords.viewToScreen(tip, c.screen);
+    this.coords.viewToScreen(
+      aim.update(hand, gestures?.[side]?.pinch.value, hands.timestamp),
+      c.screen,
+    );
     this.coords.screenToNdc(c.screen, c.ndc);
     c.hit = this.cast(side, c.ndc);
     return c;

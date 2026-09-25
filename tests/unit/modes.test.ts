@@ -1,40 +1,14 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS } from '@/config/tuning';
 import type { Command, InteractionFrame, ModeId, SceneCursor } from '@/core/types';
 import { MODE_IDS } from '@/core/types';
 import { makeGestureState } from '@/gestures/stateMachine';
 import { makeTwoHandState } from '@/gestures/twoHand';
-import { ModeController, type BaseContext } from '@/modes/ModeController';
+import { ModeController } from '@/modes/ModeController';
 import { MODE_FACTORIES } from '@/modes/registry';
 import { CommandHistory } from '@/modes/shared/history';
 import type { ModeContext, SpatialMode } from '@/modes/types';
-import type { OverlayCanvas2D } from '@/scene/overlay';
-import { CaptureManager } from '@/spatial/CaptureManager';
-import { CoordinateMapper, RaycastCursor } from '@/spatial/CoordinateMapper';
-import { ViewportMapper } from '@/spatial/ViewportMapper';
-
-function baseContext(statuses: string[] = []): BaseContext {
-  const viewport = new ViewportMapper();
-  viewport.update(1280, 720, 1280, 720);
-  const camera = new THREE.PerspectiveCamera(50, 1280 / 720, 0.1, 1000);
-  camera.position.set(0, 0, 20);
-  camera.updateMatrixWorld();
-  const coords = new CoordinateMapper(viewport, camera, { width: 1280, height: 720 });
-  return {
-    scene: new THREE.Scene(),
-    camera,
-    renderer: {} as unknown as THREE.WebGLRenderer, // not used by these modes
-    overlay: {} as unknown as OverlayCanvas2D,
-    videoTexture: {} as unknown as THREE.VideoTexture,
-    viewport,
-    coords,
-    cursors: new RaycastCursor(coords),
-    capture: new CaptureManager(),
-    settings: { ...DEFAULT_SETTINGS },
-    emitStatus: (t) => statuses.push(t),
-  };
-}
+import { baseContext } from '../fixtures/modeHarness';
 
 describe('CommandHistory', () => {
   const counter = () => {
@@ -191,8 +165,8 @@ describe('registry + PlaceholderMode', () => {
     const statuses: string[] = [];
     const base = baseContext(statuses);
     const mc = new ModeController(base, MODE_FACTORIES);
-    mc.switchTo('voxel');
-    const root = base.scene.getObjectByName('Mode:voxel');
+    mc.switchTo('panel');
+    const root = base.scene.getObjectByName('Mode:panel');
     expect(root?.visible).toBe(true);
     expect(base.cursors.targetCount).toBe(1);
 
@@ -215,7 +189,7 @@ describe('registry + PlaceholderMode', () => {
       },
       cursors: { right: cursor },
       dominant: 'right',
-      activeMode: 'voxel',
+      activeMode: 'panel',
     };
     const hitShape = () => {
       root?.updateMatrixWorld(true);
@@ -225,7 +199,7 @@ describe('registry + PlaceholderMode', () => {
       const hits = ray.intersectObjects(root ? [root] : [], true);
       const first = hits[0];
       cursor.hit = first
-        ? { point: first.point, kind: 'object', objectId: 'voxel-placeholder' }
+        ? { point: first.point, kind: 'object', objectId: 'panel-placeholder' }
         : undefined;
     };
 
@@ -234,7 +208,7 @@ describe('registry + PlaceholderMode', () => {
     pinch.phase = 'active';
     pinch.justStarted = true;
     mc.update(frame);
-    expect(base.capture.get('right')?.targetId).toBe('voxel-placeholder');
+    expect(base.capture.get('right')?.targetId).toBe('panel-placeholder');
     expect(statuses.at(-1)).toContain('captured');
 
     // Move the hand → the shape follows (no jump on grab).
@@ -255,10 +229,10 @@ describe('registry + PlaceholderMode', () => {
     // Reset view puts it back; switching away hides it.
     mc.resetView();
     expect(root?.position.x).toBe(0);
-    mc.switchTo('panel');
+    mc.switchTo('draw');
     expect(root?.visible).toBe(false);
     mc.dispose();
-    expect(base.scene.getObjectByName('Mode:voxel')).toBeUndefined();
+    expect(base.scene.getObjectByName('Mode:panel')).toBeUndefined();
   });
 });
 
@@ -266,8 +240,8 @@ describe('left/right renamed while dragging (D42)', () => {
   it('the placeholder keeps following the hand that holds it', () => {
     const base = baseContext();
     const mc = new ModeController(base, MODE_FACTORIES);
-    mc.switchTo('voxel');
-    const root = base.scene.getObjectByName('Mode:voxel');
+    mc.switchTo('panel');
+    const root = base.scene.getObjectByName('Mode:panel');
     const pinch = makeGestureState();
     const hand = {
       pinch,
@@ -281,7 +255,7 @@ describe('left/right renamed while dragging (D42)', () => {
       side: 'right',
       screen: { x: 640, y: 360 },
       ndc: { x: 0, y: 0 },
-      hit: { point: { x: 0, y: 0, z: 1.5 }, kind: 'object', objectId: 'voxel-placeholder' },
+      hit: { point: { x: 0, y: 0, z: 1.5 }, kind: 'object', objectId: 'panel-placeholder' },
     };
     const frame: InteractionFrame = {
       timestamp: 0,
@@ -290,12 +264,12 @@ describe('left/right renamed while dragging (D42)', () => {
       gestures: { right: hand, twoHand: makeTwoHandState() },
       cursors: { right: cursor },
       dominant: 'right',
-      activeMode: 'voxel',
+      activeMode: 'panel',
     };
     pinch.phase = 'active';
     pinch.justStarted = true;
     mc.update(frame);
-    expect(base.capture.get('right')?.targetId).toBe('voxel-placeholder');
+    expect(base.capture.get('right')?.targetId).toBe('panel-placeholder');
 
     // The tracker renames the holding hand: Core moves the captures and tells the mode.
     base.capture.swapSides();
@@ -304,7 +278,7 @@ describe('left/right renamed while dragging (D42)', () => {
     frame.gestures = { left: hand, twoHand: makeTwoHandState() };
     frame.cursors = { left: { ...cursor, side: 'left', ndc: { x: 0.3, y: 0.2 } } };
     mc.update(frame);
-    expect(base.capture.get('left')?.targetId).toBe('voxel-placeholder'); // still held…
+    expect(base.capture.get('left')?.targetId).toBe('panel-placeholder'); // still held…
     expect(root?.position.x).toBeGreaterThan(1); // …and still following the hand
     mc.dispose();
   });

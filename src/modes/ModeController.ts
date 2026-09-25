@@ -3,10 +3,9 @@
 // the next enter()s; per-mode state (and undo history) is preserved across switches.
 // Also precedence rule 1: while a UI overlay is open, the scene receives no gestures.
 
-import type { KeyAction } from '@/config/keybindings';
 import type { InteractionFrame, ModeId } from '@/core/types';
 import { CommandHistory } from './shared/history';
-import type { ModeContext, ModeFactory, SpatialMode } from './types';
+import type { ModeAction, ModeContext, ModeFactory, SpatialMode } from './types';
 
 export type BaseContext = Omit<ModeContext, 'history'>;
 
@@ -86,11 +85,14 @@ export class ModeController {
     if (captured) this.base.capture.releaseAll('ui');
   }
 
+  /** Anything held (e.g. a half-drawn stroke) is finished first, so it becomes the step undone. */
   undo(): boolean {
+    this.base.capture.releaseAll('cancelled');
     return this.history?.undo() ?? false;
   }
 
   redo(): boolean {
+    this.base.capture.releaseAll('cancelled');
     return this.history?.redo() ?? false;
   }
 
@@ -108,8 +110,9 @@ export class ModeController {
     this.active?.onSidesSwapped?.();
   }
 
-  handleKey(action: KeyAction): boolean {
-    return this.active?.onKey?.(action) ?? false;
+  /** A key or tool-panel button for the active experience. Returns true if it was used. */
+  handleAction(action: ModeAction): boolean {
+    return this.active?.onAction?.(action) ?? false;
   }
 
   onHistoryChange(listener: HistoryListener): () => void {

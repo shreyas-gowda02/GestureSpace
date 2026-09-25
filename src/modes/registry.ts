@@ -4,6 +4,7 @@
 import { MODE_IDS, type ModeId } from '@/core/types';
 import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
 import type { ModeFactory } from './types';
+import { VoxelMode } from './voxel/VoxelMode';
 
 export interface ModeHelpItem {
   gesture: string;
@@ -118,9 +119,11 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
 
 export const MODE_LIST: readonly ModeMeta[] = MODE_IDS.map((id) => MODE_META[id]);
 
+/** Experiences that are fully built (the rest still run as PlaceholderMode). */
+export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>(['voxel']);
+
 /** Placeholder look per experience until its real implementation lands. */
-const PLACEHOLDERS: Record<ModeId, { shape: PlaceholderShape; color: string }> = {
-  voxel: { shape: 'box', color: '#21d4d8' },
+const PLACEHOLDERS: Record<Exclude<ModeId, 'voxel'>, { shape: PlaceholderShape; color: string }> = {
   panel: { shape: 'panel', color: '#6c8cff' },
   draw: { shape: 'torusKnot', color: '#ff3dcb' },
   strings: { shape: 'icosahedron', color: '#a6ff3d' },
@@ -129,13 +132,13 @@ const PLACEHOLDERS: Record<ModeId, { shape: PlaceholderShape; color: string }> =
   objectLab: { shape: 'octahedron', color: '#ff7a59' },
 };
 
-function placeholder(id: ModeId): ModeFactory {
+function placeholder(id: Exclude<ModeId, 'voxel'>): ModeFactory {
   const meta = MODE_META[id];
   return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
 }
 
 export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
-  voxel: placeholder('voxel'),
+  voxel: () => new VoxelMode(),
   panel: placeholder('panel'),
   draw: placeholder('draw'),
   strings: placeholder('strings'),

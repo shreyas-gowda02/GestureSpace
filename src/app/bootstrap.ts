@@ -4,6 +4,7 @@
 
 import type { KeyAction } from '@/config/keybindings';
 import type { CameraError } from '@/core/camera';
+import type { ModeAction } from '@/modes/types';
 import { useAppStore } from '@/state/appStore';
 import { createLogger } from '@/utils/logger';
 import { Core } from './Core';
@@ -100,6 +101,11 @@ export function resetView(): void {
 /** Forward a keyboard action to the core / active mode. Returns true if it was used. */
 export function handleKeyAction(action: KeyAction): boolean {
   return getCore()?.handleKey(action) ?? false;
+}
+
+/** Tool-panel button of the active experience (tool, colour, depth…). */
+export function modeAction(action: ModeAction): void {
+  getCore()?.modeAction(action);
 }
 
 export function debugSnapshot(): DebugSnapshot | null {

@@ -11,7 +11,7 @@ import { InteractionPlane } from '@/spatial/CoordinateMapper';
 import type { ModeContext, SpatialMode } from './types';
 
 export type PlaceholderShape =
-  'box' | 'panel' | 'torusKnot' | 'icosahedron' | 'cylinder' | 'torus' | 'octahedron';
+  'panel' | 'torusKnot' | 'icosahedron' | 'cylinder' | 'torus' | 'octahedron';
 
 export interface PlaceholderSpec {
   id: ModeId;
@@ -24,8 +24,6 @@ export interface PlaceholderSpec {
 
 function makeGeometry(shape: PlaceholderShape): THREE.BufferGeometry {
   switch (shape) {
-    case 'box':
-      return new THREE.BoxGeometry(3, 3, 3);
     case 'panel':
       return new THREE.BoxGeometry(5, 3, 0.2);
     case 'torusKnot':
