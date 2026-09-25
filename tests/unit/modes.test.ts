@@ -261,3 +261,51 @@ describe('registry + PlaceholderMode', () => {
     expect(base.scene.getObjectByName('Mode:voxel')).toBeUndefined();
   });
 });
+
+describe('left/right renamed while dragging (D42)', () => {
+  it('the placeholder keeps following the hand that holds it', () => {
+    const base = baseContext();
+    const mc = new ModeController(base, MODE_FACTORIES);
+    mc.switchTo('voxel');
+    const root = base.scene.getObjectByName('Mode:voxel');
+    const pinch = makeGestureState();
+    const hand = {
+      pinch,
+      grab: makeGestureState(),
+      point: makeGestureState(),
+      openPalm: makeGestureState(),
+      thumbPinky: makeGestureState(),
+      depthSignal: 0,
+    };
+    const cursor: SceneCursor = {
+      side: 'right',
+      screen: { x: 640, y: 360 },
+      ndc: { x: 0, y: 0 },
+      hit: { point: { x: 0, y: 0, z: 1.5 }, kind: 'object', objectId: 'voxel-placeholder' },
+    };
+    const frame: InteractionFrame = {
+      timestamp: 0,
+      dt: 1 / 60,
+      hands: { timestamp: 0, inferenceTimestamp: 0 },
+      gestures: { right: hand, twoHand: makeTwoHandState() },
+      cursors: { right: cursor },
+      dominant: 'right',
+      activeMode: 'voxel',
+    };
+    pinch.phase = 'active';
+    pinch.justStarted = true;
+    mc.update(frame);
+    expect(base.capture.get('right')?.targetId).toBe('voxel-placeholder');
+
+    // The tracker renames the holding hand: Core moves the captures and tells the mode.
+    base.capture.swapSides();
+    mc.swapSides();
+    pinch.justStarted = false;
+    frame.gestures = { left: hand, twoHand: makeTwoHandState() };
+    frame.cursors = { left: { ...cursor, side: 'left', ndc: { x: 0.3, y: 0.2 } } };
+    mc.update(frame);
+    expect(base.capture.get('left')?.targetId).toBe('voxel-placeholder'); // still held…
+    expect(root?.position.x).toBeGreaterThan(1); // …and still following the hand
+    mc.dispose();
+  });
+});

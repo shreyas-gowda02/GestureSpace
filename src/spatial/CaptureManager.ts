@@ -57,6 +57,16 @@ export class CaptureManager {
     }
   }
 
+  /** The hand pipeline renamed left ↔ right (D42): whatever a hand holds stays with that hand. */
+  swapSides(): void {
+    const l = this.captures.get('left');
+    const r = this.captures.get('right');
+    this.captures.delete('left');
+    this.captures.delete('right');
+    if (l) this.captures.set('right', { ...l, key: 'right' });
+    if (r) this.captures.set('left', { ...r, key: 'left' });
+  }
+
   releaseAll(reason: ReleaseReason): void {
     for (const key of [...this.captures.keys()]) this.release(key, reason);
   }

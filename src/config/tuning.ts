@@ -103,8 +103,50 @@ export const TUNING = {
      * two-hand stretch can reach ~12). Background people are mostly rejected by the scale ratio.
      */
     partnerMaxDistPalms: 14,
-    /** Consecutive inferences a contradicting handedness label must persist before sides flip. */
-    labelSwitchFrames: 3,
+  },
+
+  /**
+   * Which physical hand is which (D42). Each tracked hand collects two votes per inference —
+   * MediaPipe's label and the 3D "thumb check" (chirality of the hand's own axes) — each weighted
+   * by how trustworthy it is. Calibrated on the user's recordings (tests/fixtures/landmarks/real).
+   */
+  handedness: {
+    /**
+     * Box overlap (IoU) above which the less confident of two detections is a phantom duplicate.
+     * Measured: phantoms ≥ 0.17 (median 0.47); the user's real hands, even crossed, ≤ 0.14.
+     */
+    phantomOverlap: 0.15,
+    /** MediaPipe score → vote weight 0..1: 0.55 or less is a coin flip (60% right), 0.85+ is 99%. */
+    labelScore: { min: 0.55, full: 0.85 },
+    /** |chirality| → vote weight 0..1: < 0.02 is flat/edge-on (54% right), 0.12+ is ≥ 99.5%. */
+    chirality: { min: 0.02, full: 0.12 },
+    /** Per inference, old evidence keeps this share, so a track can recover from a bad start. */
+    decay: 0.8,
+    /** Each vote's running total is clamped to ±cap, so no history is ever unbeatable. */
+    cap: 3,
+    /** Evidence (per hand, both votes summed) needed to rename a tracked hand. */
+    switchMargin: 1.5,
+    /**
+     * While a gesture holds something (identity lock) a rename needs more evidence AND the 3D vote
+     * must agree on its own — labels alone are unreliable exactly then (crossed hands).
+     */
+    lockedSwitchMargin: 3,
+    locked3dMargin: 1.5,
+    /**
+     * Hands crossing close together: with BOTH hands tracked, a detection whose own votes (≥ this
+     * much, of ±2) contradict a track's settled side costs this much extra distance to continue it
+     * (aspect-corrected view units; continuity radius is userLock.matchMaxDist = 0.3).
+     */
+    contradictVote: 1,
+    contradictPenalty: 0.2,
+    /**
+     * A hand that just came into view is shown once its evidence reaches this (a hand entering
+     * edge-on can give weak, wrong votes for a few frames)… In the user's recordings 14 of 17
+     * arrivals were clear on the first frame; the rest took 83–300 ms.
+     */
+    commitVote: 1,
+    /** …or after this long at the latest, with the best guess (0 = show new hands immediately). */
+    maxNamingWaitMs: 250,
   },
 
   gestures: {

@@ -76,7 +76,12 @@ hand tracking runs in a **Web Worker** (D38; screen stays at 60 FPS while infere
 fallback to the main thread; `?vision=main` forces the old path) and every detected hand now reaches
 the main-user lock (D39). Drawing is capped at 60 fps so it doesn't starve the tracker of GPU
 time (D40), and MediaPipe looks for 2 hands, not 4 (D41). Together that restored Phase 2's 13 hand
-updates/s with two hands. 127 tests passing.
+updates/s with two hands. **Which hand is which (D42):** phantom duplicate hands are dropped; each
+hand's side comes from two confidence-weighted votes (MediaPipe's label + a 3D "thumb check"), so
+crossed hands keep their names; a wrong side can be corrected mid-pinch and whatever the hand holds
+moves with it; a newly arrived hand is shown once its side is clear (≤ 250 ms). Verified end to end on
+the user's three real recordings (`tests/fixtures/landmarks/real/`, `realHands.test.ts`): 0 ms wrong
+side, 0 ms phantoms. The Debug panel shows both votes per hand. 140 tests passing.
 
 **What does not work yet:** the seven real experiences (placeholders only — Voxel Builder is next),
 Help/Settings panels (buttons only toggle state; settings live in the store with defaults).
@@ -92,12 +97,12 @@ Help/Settings panels (buttons only toggle state; settings live in the store with
 2. `npm install` if `node_modules/` is missing (postinstall copies MediaPipe WASM into
    `public/mediapipe/wasm/`).
 3. Run the phase gate once to confirm a green baseline (see §5).
-4. **Pending before Phase 5 — handedness robustness (§7c).** Ask whether the user has made the
-   real recordings (`tests/fixtures/landmarks/real/right-only.json`, `left-only.json`,
-   `both-crossing.json`, optional `friend-right.json`) and the Debug panel check (friend's right
-   hand → `MediaPipe “Right”` or `“Left”`?). With them: score current vs new handedness, then build
-   §7c Layers 1–2. The lag is fixed and verified by the user's recordings: 13.2 hand updates/s with
-   two hands, the same as Phase 2 (D40 + D41).
+4. **Handedness (§7c) Layers 0–2 are DONE (D42)**, verified on the user's recordings
+   (`tests/fixtures/landmarks/real/right-only.json`, `left-only.json`, `both-crossing.json`; run
+   `tests/integration/realHands.test.ts` after any tracking/gesture change). Still open: a
+   `friend-right.json` recording (another person's hand — the original trigger) to confirm the fix
+   generalises; add it to `real/` and to `realHands.test.ts`. The lag is fixed too: 13.2 hand
+   updates/s with two hands, the same as Phase 2 (D40 + D41).
 5. Ask the user about the Phase 4 real-hand check (3D cursor ring follows the fingertip; pinch the
    placeholder shape and drag it; switch modes mid-drag; Leak check button). Earlier pending checks:
    lag fix feel (D30) and Phase 3 gestures (pinch, fist, point, open
@@ -194,7 +199,7 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D24 | One Euro `beta` is per **view-unit/s**: visual 8, trigger 20 (spec's 0.007 assumed pixels). Visual minCutoff comes from the Smoothing slider (`smoothingToMinCutoff`, default 0.65 → ≈1.25 Hz)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Spec values would lag badly in normalized units                                                               |
 | D25 | Grab = **farthest** fingertip→palm-centre / palm (< 0.6 start, > 0.75 end); a fist never counts as a pinch (`pinchGestureValue`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Mean-based grab fired on 'point'; fists read as pinches                                                       |
 | D26 | Contract extensions: `TrackedHand.triggerLandmarks`, `TwoHandState.cancelFirstHand`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Spec §10 trigger profile; §11 precedence rule 2                                                               |
-| D27 | Side stability: a contradicting MediaPipe label must persist 3 inferences (`labelSwitchFrames`); while `GestureEngine.capturing` (pinch/grab/two-hand active) sides follow proximity only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | §8 hands crossing; label flicker                                                                              |
+| D27 | _Superseded by D42._ Side stability: a contradicting label had to persist 3 inferences (`labelSwitchFrames`); while `GestureEngine.capturing` sides followed proximity only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | §8 hands crossing; label flicker                                                                              |
 | D28 | Precedence rule 2 → `singleHandPinchAllowed()` + `cancelFirstHand`. Rule 1 (UI consumes gestures) and rules 3–4 (release to capturer, no capture survives a mode switch) are implemented with CaptureManager/ModeController in Phase 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Need those systems first                                                                                      |
 | D29 | Synthetic hand generator is TypeScript: `tests/fixtures/syntheticHands.ts` (poses open/fist/point/pinch/thumbPinky + scenarios wave/pinch/tour/two-hand stretch/crowd); `node scripts/make-fixtures.ts` (Node 24 runs TS) regenerates the committed wave JSON. Replaced the old `.mjs` script                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | One generator for tests, demos and the browser pane                                                           |
 | D30 | **Lag fix (user compared Phase 2 vs 3 on 2026-09-24: smoother but visibly laggier).** Measured with a jitter/lag simulation + a permanent test (`smoothing latency budget` in `tests/unit/vision.test.ts`). Now: visual beta 40 / dCutoff 2, trigger beta 40 / dCutoff 2, default slider 0.78 (≈0.9 Hz) **+ velocity prediction**: `tick()` extrapolates the smoothed landmarks to render time (≤ 50 ms, velocity low-pass 5 Hz). Real pipeline: jitter 0.70 px (raw 1.41), lag 5.6 ms (raw 8.7, old Phase 3 ≈ 27), fast-wave trailing 11.6 px (old ≈ 27). Cost: ~5 px overshoot on abrupt stops. Debug panel has an Off / Smooth / Smooth + predict switch (`SmoothingMode`, default `predict`)                                                                                                                                                                                                                                                | User feedback; keeps smoothness, removes lag, 60 Hz visual updates                                            |
@@ -209,6 +214,7 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D39 | **Bug fix:** `LiveTrackerSource` kept only the first 2 of up to 4 hands MediaPipe reported, so the main-user lock (D23) never saw everyone. Hand pools are now sized to `numHands` (`makeHandPool`, `fillDetection`, wire protocol) and a unit test guards it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fixtures bypassed that path, so tests missed it                                                               |
 | D40 | **Draws capped at 60 fps** (`TUNING.scene.maxRenderFps`, `FramePacer` in `core/renderLoop.ts`). Only `renderFrame()` is paced; tracking, gestures and modes still run every display frame, and the FPS counter counts draws. Root cause (2026-09-25, user's A/B recordings on a 144 Hz laptop, same camera 1 min apart): current code gave 9.2 / 6.2 hand updates/s with 1 / 2 hands vs Phase 2's 19.3 / 13.3. Since D38 the page redraws up to 144×/s on the same Intel iGPU MediaPipe uses (Phase 2's blocking inference paused drawing). Pane: drawing on → 35 ms per detection, off → 27 ms; 60 fps cap → 30/30 camera frames analysed (was 27, 3 skipped). User's re-recording: 6.2 → 10.1 hand updates/s with two hands. The second cause (`numHands: 4`) is fixed by D41                                                                                                                                                                 | User felt lag; A/B showed hand updates halved vs Phase 2                                                      |
 | D41 | **`numHands: 4` → `2`** (user's decision, 2026-09-25). MediaPipe skips its palm detector only once it tracks `numHands` hands, so 4 re-ran it on every frame (≈ 25 ms on the Intel iGPU) and produced phantom duplicate hands (10 of 421 detections). User's A/B on `f9e2673`, where only `numHands` differed: 10.1 → 13.2 hand updates/s with two hands (Phase 2: 13.3). The main-user lock logic stays and still vets the ≤ 2 hands it gets. Accepted trade-off: while one of the user's hands is out of view, a background hand can take the free slot until it leaves. If that bites, prototype switching 2 ↔ 4 at runtime with `HandLandmarker.setOptions({ numHands })` (switch cost unmeasured)                                                                                                                                                                                                                                          | User's A/B: 4 hands was the rest of the lag                                                                   |
+| D42 | **Which hand is which, by evidence** (§7c Layers 0–2, 2026-09-25; `TUNING.handedness`): phantom filter (drop the less confident of two detections whose boxes overlap > 0.15 IoU; user's data: phantoms ≥ 0.17, real hands ≤ 0.14); each hand sums two leaky, confidence-weighted votes, MediaPipe's label and the 3D thumb check `handChirality()` (signed volume of wrist → index / pinky MCP / thumb CMC, world landmarks; rotation-invariant), replacing D27 and D21's position rule (kept only for brand-new hands with no evidence); renames need margin 1.5, or 3 plus an agreeing 3D vote while a gesture holds, and SWAP slots (`takeSwap()` → gestures, two-hand angle, captures, depth, `SpatialMode.onSidesSwapped`); continuity penalises contradicting votes when both hands are tracked; new hands show once votes are clear or after 250 ms. Real recordings: wrong side 0 / 3.0 / 5.8 s → 0, phantoms 1.8 / 2.2 / 2.1 s → 0    | App side logic, not MediaPipe, made the errors                                                                |
 
 ---
 
@@ -325,7 +331,13 @@ Built — see §9 and D31–D37. Leak check (10× all modes) verified flat in th
   `GESTURES.md`, `MODES.md`, `PERFORMANCE.md`, `TROUBLESHOOTING.md`), code-splitting, Vercel deploy +
   CI deploy step, release tags `v0.1-m0` … `v1.0-m4`.
 
-### 7c. Handedness robustness — agreed plan, pending the user's recordings (do before Phase 5)
+### 7c. Handedness robustness — Layers 0–2 DONE (D42, 2026-09-25); Layers 3–4 still planned
+
+**Result:** the user's recordings showed MediaPipe itself was 99.5–99.7% right with one hand; every
+visible error came from the app's side logic (phantoms accepted, position tie-break wrong when
+crossed, the lock trap, a 150 ms ghost after renames). All fixed by D42; the 3D thumb check was 99.3%
+right on the crossing recording and is required there (the test fails without it). The plan below
+is kept for reference.
 
 **Trigger (2026-09-24):** screenshot — the user's friend's RIGHT hand was labelled "Left 97%" while
 pinching the placeholder cube. Position is NOT the cause (we never use it except as a tie-break).
@@ -470,10 +482,23 @@ handleKey`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_META` 
 - `src/vision/landmarks.ts` — `WRIST … PINKY_TIP`, `FINGERTIPS`, `HAND_CONNECTIONS`, `palmScale`
   (aspect-corrected), `boundsInto`, `makeLandmarkBuffer`.
 - `src/vision/handPipeline.ts` — `HandNormalizer.process(det, mirror, now)` (per inference) and
-  `tick(now)` (every frame, grace period) → reused `HandFrame`. Steps: confidence gate → main-user
-  lock `select()` → `assignSides()` (labels + hysteresis, identity lock) → `updateSlot()` (jump
-  rejection, smoothing, palmScale/bbox). `HandSlot` implements `TrackedHand` + pipeline state.
-  `setIdentityLock()`, `setSmoothing(slider)`, debug counts `detectedCount/gatedCount/usedCount`.
+  `tick(now)` (every frame, grace period) → reused `HandFrame`. Steps: confidence gate + phantom
+  filter (`gather()`) → main-user lock `select()` (continuity penalises contradicting votes) →
+  `matchPending()` → `vote()` (label + `handChirality()` votes, leaky, capped) → `holdBackUnclear()`
+  (new hands wait ≤ `maxNamingWaitMs`) → `decideSides()` → `applyRenames()` (swaps the two
+  `HandSlot`s; `takeSwap()` reports it once) → `updateSlot()` (jump rejection, smoothing,
+  palmScale/bbox). `slots` is a mutable record (swapped on rename). `HandSlot` implements
+  `TrackedHand` + pipeline state incl. `voteLabel` / `vote3d`. `setIdentityLock()`,
+  `setSmoothing(slider)`, debug counts `detectedCount/gatedCount/phantomCount/usedCount/pendingCount`.
+- `perceptionStep()` in `src/gestures/GestureEngine.ts` — ONE perception step (process/tick →
+  rename propagation → gestures → identity lock); Core and every replay test use it. On a rename
+  Core also swaps depth estimators, `CaptureManager.swapSides()`, `ModeController.swapSides()` →
+  `SpatialMode.onSidesSwapped?()`; `GestureEngine.swapSides()` / `TwoHandTracker.swapSides()` keep
+  gesture state and the two-hand rotation continuous. Modes that store a side must implement
+  `onSidesSwapped`.
+- `tests/integration/realHands.test.ts` — replays the user's real recordings through
+  `perceptionStep` and scores every frame (single-hand files: known side; both-crossing: a
+  motion-only answer key that is sanity-checked first). The end-to-end regression test for tracking.
 - `src/vision/smoothing.ts` — `OneEuroFilter`, `LandmarkSmoother` (visual + trigger profiles,
   per-coordinate velocity, `predictVisual(out, aheadMs)`), `smoothingToMinCutoff(slider)`,
   `SmoothingMode` ('off' | 'smooth' | 'predict'). `HandNormalizer.setSmoothingMode()`,
@@ -575,3 +600,12 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   user's re-recording showed 6.2 → 10.1 hand updates/s. An A/B of `numHands` 2 vs 4 on the same
   code gave 13.2/s, equal to Phase 2, and the user chose 2 (D41). **Next:** handedness recordings
   (§7c) → Phase 5.
+- **2026-09-25 — Session 2 (cont.).** User recorded right-only / left-only / both-crossing (now
+  `tests/fixtures/landmarks/real/`). Replayed them through the real pipeline: MediaPipe 99.5–99.7%
+  right; the app's side logic made all errors (fake phantom hands 1.8–2.2 s per file, left hand
+  shown as right for 3 s by the lock trap, 5.8 s wrong while crossing via the position tie-break).
+  Validated the user's thumb idea as a 3D chirality check (99.3% on crossing, rotation-invariant),
+  calibrated vote weights and the phantom threshold on their data, built D42, and added
+  `realHands.test.ts` (sabotage-checked: fails without the 3D vote or the phantom filter).
+  Verified in the browser pane by stepping `core['frame']` through the crossing recording.
+  **Next:** optional friend recording → then Phase 5 (Voxel Builder).

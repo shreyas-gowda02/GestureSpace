@@ -17,6 +17,7 @@ import { useAppStore } from '@/state/appStore';
 
 const f1 = (n: number): string => n.toFixed(1);
 const f2 = (n: number): string => n.toFixed(2);
+const signed = (n: number): string => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)}`;
 
 const GESTURE_LABEL: Record<string, string> = {
   pinch: 'pinch',
@@ -181,6 +182,8 @@ export function DebugPanel() {
             </Row>
             <Row label="Hands seen">
               {snap.userLock.detected} detected · {snap.userLock.used} used (main user)
+              {snap.userLock.phantoms > 0 && ` · ${snap.userLock.phantoms} phantom dropped`}
+              {snap.userLock.waiting > 0 && ` · ${snap.userLock.waiting} waiting to be named`}
               {snap.userLock.identityLocked && ' · 🔒'}
             </Row>
             <Row label="Smoothing">{f2(snap.smoothingHz)} Hz min cutoff</Row>
@@ -201,6 +204,9 @@ export function DebugPanel() {
                 {Math.round(h.score * 100)}% · palm {f2(h.palmScale)} · wrist ({f2(h.wrist.x)},{' '}
                 {f2(h.wrist.y)}){h.lostForMs > 0 && ` · lost ${Math.round(h.lostForMs)} ms`}
                 <span className="gs-muted"> · MediaPipe “{h.rawLabel}”</span>
+                <div className="gs-muted" title="Running votes: + = right hand, − = left hand">
+                  votes: MediaPipe {signed(h.votes.label)} · 3D thumb check {signed(h.votes.hand3d)}
+                </div>
                 <div className="gs-muted">
                   depth {f2(h.depth.signal)} (step {h.depth.steps}) · cursor{' '}
                   {h.cursor

@@ -103,6 +103,11 @@ export class ModeController {
     this.active?.resetView?.();
   }
 
+  /** Left ↔ right were renamed (D42): let the active experience flip any side it stored. */
+  swapSides(): void {
+    this.active?.onSidesSwapped?.();
+  }
+
   handleKey(action: KeyAction): boolean {
     return this.active?.onKey?.(action) ?? false;
   }

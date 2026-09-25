@@ -176,6 +176,20 @@ describe('CaptureManager', () => {
     expect(cm.count).toBe(0);
   });
 
+  it('swapSides: whatever a hand holds moves with it when left/right are renamed (D42)', () => {
+    const cm = new CaptureManager();
+    const got: string[] = [];
+    cm.capture('right', 'box', 0, (r) => got.push(r));
+    cm.capture('twoHand', 'panel', 0);
+    cm.swapSides();
+    expect(cm.get('right')).toBeUndefined();
+    expect(cm.get('left')?.targetId).toBe('box');
+    expect(cm.get('left')?.key).toBe('left');
+    expect(cm.get('twoHand')?.targetId).toBe('panel'); // two-hand captures are side-less
+    cm.release('left');
+    expect(got).toEqual(['released']); // the original captor still gets its release
+  });
+
   it('releaseAll / releaseTarget deliver the reason to every captor', () => {
     const cm = new CaptureManager();
     const got: string[] = [];

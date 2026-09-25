@@ -43,6 +43,11 @@ export interface SpatialMode {
   resetView?(): void;
   /** Mode-specific keys (depth, tools, filters…). Return true if handled. */
   onKey?(action: KeyAction): boolean;
+  /**
+   * The tracker corrected which hand is which (D42): any side the mode stored (e.g. "held by the
+   * right hand") now refers to the other hand. Captures have already been moved.
+   */
+  onSidesSwapped?(): void;
   /** Leaving the mode: hide content, drop hover state. Captures are released by the controller. */
   exit(): void;
   /** Free every GPU resource (§2 rule 6). */

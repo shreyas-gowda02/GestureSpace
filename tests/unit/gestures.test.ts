@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TrackedHand, Vec3 } from '@/core/types';
+import type { HandSide, TrackedHand, Vec3 } from '@/core/types';
 import {
   grabValue,
   openPalmValue,
@@ -8,6 +8,7 @@ import {
   pointValue,
   thumbPinkyValue,
 } from '@/gestures/detectors';
+import { GestureEngine } from '@/gestures/GestureEngine';
 import { GestureStateMachine } from '@/gestures/stateMachine';
 import { makeTwoHandState, TwoHandTracker } from '@/gestures/twoHand';
 import { makeGestureState } from '@/gestures/stateMachine';
@@ -219,6 +220,20 @@ describe('TwoHandTracker', () => {
     expect(last).toBeCloseTo(1.2 * Math.PI);
   });
 
+  it('stays continuous when the hand pipeline renames left ↔ right mid-gesture (D42)', () => {
+    const t = new TwoHandTracker();
+    t.update(at(0.4, 0.5), pinching(0), at(0.6, 0.5), pinching(0), 1);
+    const before = t.update(at(0.4, 0.45), pinching(0), at(0.6, 0.55), pinching(0), 1);
+    const rotation = before.rotation;
+    const scale = before.scale;
+    t.swapSides(); // the hand shown as left is now the right one, and vice versa
+    const after = t.update(at(0.6, 0.55), pinching(0), at(0.4, 0.45), pinching(0), 1);
+    expect(after.active).toBe(true);
+    expect(after.justStarted).toBe(false);
+    expect(after.rotation).toBeCloseTo(rotation);
+    expect(after.scale).toBeCloseTo(scale);
+  });
+
   it('ends when either hand stops pinching or disappears', () => {
     const t = new TwoHandTracker();
     t.update(at(0.4, 0.5), pinching(0), at(0.6, 0.5), pinching(500), 1);
@@ -227,5 +242,37 @@ describe('TwoHandTracker', () => {
     expect(s.justEnded).toBe(true);
     expect(s.active).toBe(false);
     expect(makeTwoHandState().scale).toBe(1);
+  });
+});
+
+describe('GestureEngine.swapSides (D42)', () => {
+  const tracked = (lms: Vec3[], side: HandSide): TrackedHand => ({
+    side,
+    score: 1,
+    rawLandmarks: lms,
+    landmarks: lms,
+    triggerLandmarks: lms,
+    palmScale: palmScale(lms, ASPECT),
+    bbox: { min: { x: 0, y: 0 }, max: { x: 1, y: 1 } },
+    lostForMs: 0,
+  });
+
+  it('a held pinch follows the hand when it is renamed: no false release, no second start', () => {
+    const e = new GestureEngine();
+    const { lms } = viewPose('pinch');
+    for (let t = 0; t <= 200; t += 16) {
+      e.update({ timestamp: t, inferenceTimestamp: t, right: tracked(lms, 'right') }, ASPECT, t);
+    }
+    expect(e.frame.right?.pinch.phase).toBe('active');
+    e.swapSides();
+    const g = e.update(
+      { timestamp: 216, inferenceTimestamp: 216, left: tracked(lms, 'left') },
+      ASPECT,
+      216,
+    );
+    expect(g.left?.pinch.phase).toBe('active');
+    expect(g.left?.pinch.justStarted).toBe(false);
+    expect(g.left?.pinch.justEnded).toBe(false);
+    expect(g.right).toBeUndefined();
   });
 });

@@ -1,10 +1,10 @@
 // Full perception → gesture pipeline driven by synthetic fixtures, exactly as Core.frame runs it:
-// FixturePlaybackSource → HandNormalizer (process / tick) → GestureEngine → identity lock feedback.
+// FixturePlaybackSource → `perceptionStep` (HandNormalizer → GestureEngine → identity lock).
 
 import { describe, expect, it } from 'vitest';
 import { FixturePlaybackSource, type LandmarkFixture } from '@/core/input';
 import type { GestureFrame, HandFrame } from '@/core/types';
-import { GestureEngine } from '@/gestures/GestureEngine';
+import { GestureEngine, perceptionStep } from '@/gestures/GestureEngine';
 import { HandNormalizer } from '@/vision/handPipeline';
 import {
   ASPECT,
@@ -22,11 +22,8 @@ function run(fixture: LandmarkFixture, visit: Visit): void {
   const engine = new GestureEngine();
   const end = src.duration + 400; // let grace periods / releases play out
   for (let now = 0; now <= end; now += 1000 / 60) {
-    const det = src.poll(now);
-    const hands = det ? norm.process(det, true, now) : norm.tick(now);
-    const g = engine.update(hands, ASPECT, now);
-    norm.setIdentityLock(engine.capturing);
-    visit(hands, g, now);
+    perceptionStep(norm, engine, src.poll(now), true, ASPECT, now, false);
+    visit(norm.frame, engine.frame, now);
   }
 }
 

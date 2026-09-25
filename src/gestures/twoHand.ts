@@ -103,6 +103,15 @@ export class TwoHandTracker {
     return s;
   }
 
+  /**
+   * The hand pipeline renamed left ↔ right (D42): the hand-to-hand vector now points the other
+   * way (angle + π). Shift the unwrapped angle and baseline with it so rotation stays continuous.
+   */
+  swapSides(): void {
+    if (this.hasAngle) this.unwrapped += Math.PI;
+    if (this.state.active) this.baseAngle += Math.PI;
+  }
+
   reset(): void {
     const s = this.state;
     s.active = s.justStarted = s.justEnded = false;

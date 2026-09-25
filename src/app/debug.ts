@@ -71,12 +71,23 @@ export interface DebugSnapshot {
   viewport: { width: number; height: number; dpr: number };
   mirror: boolean;
   /** Main-user lock at the last inference. */
-  userLock: { detected: number; gated: number; used: number; identityLocked: boolean };
+  userLock: {
+    detected: number;
+    gated: number;
+    /** Duplicate detections of one hand dropped at the last inference (D42). */
+    phantoms: number;
+    /** Hands in view whose side is not clear yet (not shown until it is, D42). */
+    waiting: number;
+    used: number;
+    identityLocked: boolean;
+  };
   smoothingHz: number;
   smoothingMode: SmoothingMode;
   hands: {
     side: HandSide;
     rawLabel: string;
+    /** Running handedness votes (D42), > 0 = right: MediaPipe label · 3D thumb check. */
+    votes: { label: number; hand3d: number };
     score: number;
     palmScale: number;
     lostForMs: number;
@@ -114,9 +125,11 @@ export function buildDebugSnapshot(core: Core): DebugSnapshot {
     const g = core.gestures[side];
     const cur = core.cursors.cursors[side];
     const d = core.depth[side];
+    const slot = core.normalizer.slots[side];
     hands.push({
       side,
-      rawLabel: core.normalizer.slots[side].rawLabel,
+      rawLabel: slot.rawLabel,
+      votes: { label: slot.voteLabel, hand3d: slot.vote3d },
       score: h.score,
       palmScale: h.palmScale,
       lostForMs: h.lostForMs,
@@ -168,6 +181,8 @@ export function buildDebugSnapshot(core: Core): DebugSnapshot {
     userLock: {
       detected: n.detectedCount,
       gated: n.gatedCount,
+      phantoms: n.phantomCount,
+      waiting: n.pendingCount,
       used: n.usedCount,
       identityLocked: n.identityLocked,
     },

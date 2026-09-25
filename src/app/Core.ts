@@ -22,7 +22,7 @@ import type {
   ModeId,
   Settings,
 } from '@/core/types';
-import { describeHand, GestureEngine } from '@/gestures/GestureEngine';
+import { describeHand, GestureEngine, perceptionStep } from '@/gestures/GestureEngine';
 import { ModeController } from '@/modes/ModeController';
 import { MODE_FACTORIES } from '@/modes/registry';
 import { CameraBackground } from '@/scene/CameraBackground';
@@ -71,7 +71,8 @@ export class Core {
   readonly recorder = new FixtureRecorder();
   readonly inferenceStats = new InferenceStats();
   readonly capture = new CaptureManager();
-  readonly depth: Readonly<Record<HandSide, DepthEstimator>> = {
+  /** Per side; swapped when the hand pipeline renames left ↔ right (D42). */
+  readonly depth: Record<HandSide, DepthEstimator> = {
     left: new DepthEstimator(),
     right: new DepthEstimator(),
   };
@@ -387,18 +388,21 @@ export class Core {
   private readonly frame = (now: number, dt: number): void => {
     this.syncViewport(); // cheap no-op unless the video or viewport size changed
 
-    // 1–2. Inference on a new video frame (throttled) → gated, main-user-locked, smoothed HandFrame.
+    // 1–3. Inference on a new video frame (throttled) → gated, main-user-locked, smoothed
+    //      HandFrame → gestures (every frame, so justStarted/justEnded last exactly one frame).
+    //      The same `perceptionStep` drives the real-recording replay tests. While anything is
+    //      held, renaming a hand needs stronger evidence (D42).
     const det = this.input.poll(now);
-    if (det) {
-      if (this.input === this.live) this.recorder.record(det);
-      this.normalizer.process(det, this.viewport.mirror, now);
-    } else {
-      this.normalizer.tick(now); // prediction + loss grace period run every frame
+    if (det && this.input === this.live) this.recorder.record(det);
+    const { mirror, videoAspect } = this.viewport;
+    const holding = this.capture.count > 0;
+    if (
+      perceptionStep(this.normalizer, this.gestureEngine, det, mirror, videoAspect, now, holding)
+    ) {
+      this.onSidesSwapped();
     }
     const hands = this.hands;
-
-    // 3. Gestures (every frame, so justStarted/justEnded last exactly one frame) + depth.
-    const gestures = this.gestureEngine.update(hands, this.viewport.videoAspect, now);
+    const gestures = this.gestures;
     for (const side of SIDES) {
       const d = this.depth[side].update(hands[side], now);
       const g = gestures[side];
@@ -409,8 +413,6 @@ export class Core {
     this.cursors.update(hands);
     for (const side of SIDES) if (!hands[side]) this.capture.release(side, 'lost');
     if (!hands.left || !hands.right) this.capture.release('twoHand', 'lost');
-    // While anything is held, lock hand identities by proximity (§8 hands crossing).
-    this.normalizer.setIdentityLock(this.gestureEngine.capturing || this.capture.count > 0);
 
     // 5. Active experience.
     const f = this.interaction;
@@ -432,6 +434,16 @@ export class Core {
     // 7. Throttled UI status.
     this.pushStatus(now);
   };
+
+  /** The hand pipeline renamed left ↔ right (D42): everything kept per side follows the hand. */
+  private onSidesSwapped(): void {
+    const { left, right } = this.depth;
+    this.depth.left = right;
+    this.depth.right = left;
+    this.capture.swapSides();
+    this.modes.swapSides();
+    log.debug('left/right renamed');
+  }
 
   private renderFrame(): void {
     this.modes.render();

@@ -1,18 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { TUNING } from '@/config/tuning';
 import type { RawDetection, RawHand } from '@/core/input';
-import type { HandFrame, Vec3 } from '@/core/types';
-import { HandNormalizer, labelToSide } from '@/vision/handPipeline';
+import type { HandFrame, HandSide, Vec3 } from '@/core/types';
+import { handChirality, HandNormalizer, labelToSide } from '@/vision/handPipeline';
 import type { SmoothingMode } from '@/vision/smoothing';
 import { makeRng } from '../fixtures/syntheticHands';
 import {
   boundsInto,
   HAND_CONNECTIONS,
+  INDEX_MCP,
   INDEX_TIP,
   LANDMARK_COUNT,
   makeLandmarkBuffer,
   MIDDLE_MCP,
   palmScale,
+  PINKY_MCP,
   PINKY_TIP,
+  THUMB_CMC,
   THUMB_TIP,
   WRIST,
 } from '@/vision/landmarks';
@@ -305,5 +309,170 @@ describe('smoothing latency budget (real pipeline, 30 Hz inference / 60 Hz rende
     // Following a fast wave: closer to the finger than both raw and plain smoothing.
     expect(predict.waveErr).toBeLessThan(raw.waveErr);
     expect(predict.waveErr).toBeLessThan(smooth.waveErr);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Which hand is which (D42): 3D thumb check, phantom filter, evidence-based sides, lock trap
+// ---------------------------------------------------------------------------------------------
+
+/** World (3D) landmarks of a right hand — or its mirror image, the left hand. */
+function worldHand(side: HandSide, rotate: (p: Vec3) => Vec3 = (p) => p): Vec3[] {
+  const s = side === 'right' ? 1 : -1;
+  const w = makeLandmarkBuffer();
+  const put = (i: number, x: number, y: number, z: number): void => {
+    w[i] = rotate({ x: s * x, y, z });
+  };
+  put(WRIST, 0, 0, 0);
+  put(INDEX_MCP, 0.02, -0.08, 0);
+  put(PINKY_MCP, -0.03, -0.07, 0);
+  put(THUMB_CMC, 0.03, -0.02, -0.02);
+  return w;
+}
+
+/** A uniformly random 3D rotation (Shoemake's random unit quaternion). */
+function randomRotation(r: () => number): (p: Vec3) => Vec3 {
+  const u1 = r();
+  const u2 = r();
+  const u3 = r();
+  const qx = Math.sqrt(1 - u1) * Math.sin(2 * Math.PI * u2);
+  const qy = Math.sqrt(1 - u1) * Math.cos(2 * Math.PI * u2);
+  const qz = Math.sqrt(u1) * Math.sin(2 * Math.PI * u3);
+  const qw = Math.sqrt(u1) * Math.cos(2 * Math.PI * u3);
+  return (p) => {
+    const cx = qy * p.z - qz * p.y;
+    const cy = qz * p.x - qx * p.z;
+    const cz = qx * p.y - qy * p.x;
+    return {
+      x: p.x + 2 * (qw * cx + qy * cz - qz * cy),
+      y: p.y + 2 * (qw * cy + qz * cx - qx * cz),
+      z: p.z + 2 * (qw * cz + qx * cy - qy * cx),
+    };
+  };
+}
+
+/** A hand with a real extent (so boxes can overlap) and, optionally, a 3D shape. */
+function boxHand(
+  label: string,
+  x: number,
+  y: number,
+  opts: { score?: number; world?: HandSide } = {},
+): RawHand {
+  const size = 0.16;
+  const landmarks: Vec3[] = makeLandmarkBuffer().map((_, i) => ({
+    x: x - size / 2 + ((i % 5) / 4) * size,
+    y: y - (Math.floor(i / 5) / 4) * size,
+    z: 0,
+  }));
+  landmarks[WRIST] = { x, y, z: 0 };
+  landmarks[MIDDLE_MCP] = { x, y: y - size / 2, z: 0 };
+  return {
+    handedness: label,
+    score: opts.score ?? 0.95,
+    landmarks,
+    ...(opts.world ? { worldLandmarks: worldHand(opts.world) } : {}),
+  };
+}
+
+describe('3D thumb check (D42)', () => {
+  it('is positive for a right hand and negative for its mirror image, however it is turned', () => {
+    const r = makeRng(42);
+    for (let k = 0; k < 50; k++) {
+      const rot = randomRotation(r);
+      expect(handChirality(worldHand('right', rot))).toBeGreaterThan(0.2);
+      expect(handChirality(worldHand('left', rot))).toBeLessThan(-0.2);
+    }
+  });
+
+  it('gives no vote for a flat hand, and none without 3D data', () => {
+    const flat = worldHand('right');
+    flat[THUMB_CMC] = { x: 0.01, y: -0.05, z: 0 }; // thumb base in the palm plane
+    expect(Math.abs(handChirality(flat))).toBeLessThan(1e-9);
+    expect(handChirality(undefined)).toBeNaN();
+  });
+});
+
+describe('which hand is which (D42)', () => {
+  it('drops a phantom duplicate on top of a real hand, but keeps two separate hands', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    const f = n.process(
+      det([boxHand('Left', 0.3, 0.7), boxHand('Right', 0.31, 0.68, { score: 0.7 })]),
+      true,
+      0,
+    );
+    expect(n.phantomCount).toBe(1);
+    expect(f.left).toBeDefined();
+    expect(f.right).toBeUndefined();
+
+    const m = new HandNormalizer({ swapLabels: false });
+    const g = m.process(det([boxHand('Left', 0.3, 0.7), boxHand('Right', 0.7, 0.7)]), true, 0);
+    expect(m.phantomCount).toBe(0);
+    expect(g.left).toBeDefined();
+    expect(g.right).toBeDefined();
+  });
+
+  it('keeps crossed hands on their true sides when MediaPipe calls both "Right" (3D decides, not screen position)', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    for (let k = 0; k <= 8; k++) {
+      // The right hand starts on the right of the mirrored view (raw x 0.3); the hands cross over.
+      const rx = 0.3 + k * 0.05;
+      const lx = 0.7 - k * 0.05;
+      const crossing = k >= 3;
+      const f = n.process(
+        det([
+          boxHand('Right', rx, 0.6, { world: 'right', score: crossing ? 0.6 : 0.95 }),
+          boxHand(crossing ? 'Right' : 'Left', lx, 0.85, {
+            world: 'left',
+            score: crossing ? 0.6 : 0.95,
+          }),
+        ]),
+        true,
+        k * 50,
+      );
+      expect(f.right?.rawLandmarks[WRIST]?.x).toBeCloseTo(rx);
+      expect(f.left?.rawLandmarks[WRIST]?.x).toBeCloseTo(lx);
+    }
+    expect(n.takeSwap()).toBe(false);
+  });
+
+  it('fixes the lock trap: mid-pinch a wrong side is corrected once the 3D check agrees; the hand keeps its identity and leaves no ghost', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    // A left hand that arrives looking like a right one (e.g. a bad first detection).
+    const slot = n.process(det([boxHand('Right', 0.3, 0.7, { world: 'right' })]), true, 0).right;
+    expect(slot).toBeDefined();
+    n.setIdentityLock(true); // the user pinches: something is held
+    let renamedAt = -1;
+    for (let k = 1; k <= 6 && renamedAt < 0; k++) {
+      const f = n.process(det([boxHand('Left', 0.3, 0.7, { world: 'left' })]), true, k * 33);
+      if (f.left) renamedAt = k;
+    }
+    expect(renamedAt).toBeGreaterThan(1); // never on a single frame…
+    expect(renamedAt).toBeLessThanOrEqual(4); // …but within a few, even while a gesture holds
+    expect(n.frame.left).toBe(slot); // the same hand object: smoothing and identity carried over
+    expect(n.frame.right).toBeUndefined(); // no ghost of the old side
+    expect(n.takeSwap()).toBe(true); // Core is told once, to move gestures / captures / depth
+    expect(n.takeSwap()).toBe(false);
+  });
+
+  it('waits to show a newly arrived hand until its side is clear, at most maxNamingWaitMs', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    // Arriving edge-on: a weak, wrong label and no usable 3D shape → not shown yet.
+    const first = n.process(det([boxHand('Right', 0.3, 0.7, { score: 0.62 })]), true, 0);
+    expect(first.right).toBeUndefined();
+    expect(n.pendingCount).toBe(1);
+    // Next inference it is clearly a left hand → shown straight away, as left.
+    const f = n.process(det([boxHand('Left', 0.3, 0.7, { world: 'left' })]), true, 50);
+    expect(f.left).toBeDefined();
+    expect(f.right).toBeUndefined();
+    expect(n.pendingCount).toBe(0);
+
+    // Never any real evidence: shown after the maximum wait, with the best guess.
+    const m = new HandNormalizer({ swapLabels: false });
+    const faint = (): RawHand => boxHand('Right', 0.3, 0.7, { score: 0.6 });
+    const wait = TUNING.handedness.maxNamingWaitMs;
+    for (let t = 0; t < wait; t += 50) {
+      expect(m.process(det([faint()]), true, t).right).toBeUndefined();
+    }
+    expect(m.process(det([faint()]), true, wait).right).toBeDefined();
   });
 });

@@ -122,6 +122,10 @@ export class PlaceholderMode implements SpatialMode {
     }
   }
 
+  onSidesSwapped(): void {
+    if (this.grabbedBy) this.grabbedBy = this.grabbedBy === 'right' ? 'left' : 'right';
+  }
+
   reset(): void {
     this.resetView();
   }

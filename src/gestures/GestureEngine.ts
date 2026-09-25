@@ -4,6 +4,7 @@
 // The GestureFrame and every GestureState are reused — no per-frame allocation.
 
 import { FEATURE_FLAGS, TUNING } from '@/config/tuning';
+import type { RawDetection } from '@/core/input';
 import type {
   GestureFrame,
   HandFrame,
@@ -12,6 +13,7 @@ import type {
   SwipeDirection,
   TrackedHand,
 } from '@/core/types';
+import type { HandNormalizer } from '@/vision/handPipeline';
 import { WRIST } from '@/vision/landmarks';
 import {
   grabValue,
@@ -187,6 +189,14 @@ export class GestureEngine {
     return f;
   }
 
+  /** The hand pipeline renamed left ↔ right (D42): gesture state follows the physical hand. */
+  swapSides(): void {
+    const { left, right } = this.hands;
+    this.hands.left = right;
+    this.hands.right = left;
+    this.twoHandTracker.swapSides();
+  }
+
   reset(): void {
     this.hands.left.reset();
     this.hands.right.reset();
@@ -206,6 +216,29 @@ export class GestureEngine {
     if (tracker.present) return tracker.release();
     return undefined;
   }
+}
+
+/**
+ * One perception step — Core runs it every display frame and the recording-replay tests run the
+ * very same function: new detection (or none) → HandFrame → left/right rename propagation →
+ * GestureFrame → identity lock. `holding` = something is captured. Returns true when the hand
+ * pipeline renamed left ↔ right this step; the caller must swap whatever else it keeps per side.
+ */
+export function perceptionStep(
+  normalizer: HandNormalizer,
+  engine: GestureEngine,
+  det: RawDetection | null,
+  mirror: boolean,
+  aspect: number,
+  now: number,
+  holding: boolean,
+): boolean {
+  const hands = det ? normalizer.process(det, mirror, now) : normalizer.tick(now);
+  const swapped = normalizer.takeSwap();
+  if (swapped) engine.swapSides();
+  engine.update(hands, aspect, now);
+  normalizer.setIdentityLock(engine.capturing || holding);
+  return swapped;
 }
 
 // ---------------------------------------------------------------------------------------------
