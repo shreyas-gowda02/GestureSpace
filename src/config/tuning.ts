@@ -15,10 +15,13 @@ export const TUNING = {
     modelAssetPath: 'models/hand_landmarker.task',
     wasmBasePath: 'mediapipe/wasm',
     /**
-     * Detect up to 4 hands so the main-user lock (handPipeline) can pick the MAIN user's pair
-     * and ignore people in the background. Only 2 hands are ever used (single-user app).
+     * Hands MediaPipe looks for. 2, not 4 (D41): MediaPipe skips its palm detector only once it
+     * tracks `numHands` hands, so 4 re-ran it on every frame (10.1 vs 13.2 hand updates/s with two
+     * hands on the user's laptop) and produced phantom duplicate hands. The main-user lock
+     * (handPipeline) still vets the ≤ 2 hands it gets. Trade-off: while one of the user's hands is
+     * out of view, a background hand can take the free slot until it leaves.
      */
-    numHands: 4,
+    numHands: 2,
     minHandDetectionConfidence: 0.5,
     minHandPresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,

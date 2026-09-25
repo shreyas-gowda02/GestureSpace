@@ -6,6 +6,7 @@ import {
   makeHandPool,
   type GateVideo,
 } from '@/core/input';
+import { TUNING } from '@/config/tuning';
 import { InferenceStats } from '@/core/renderLoop';
 import type { TrackerResult } from '@/vision/HandTracker';
 import { makeLandmarkBuffer } from '@/vision/landmarks';
@@ -38,13 +39,21 @@ function fakeResult(n: number): TrackerResult {
 }
 
 describe('fillDetection (main-thread path)', () => {
-  it('keeps ALL hands MediaPipe reports (up to numHands = 4), not just the first two', () => {
+  it('the default hand pool holds numHands hands and keeps every one MediaPipe reports', () => {
+    const n = TUNING.tracker.numHands;
     const det = makeDetection();
-    fillDetection(det, makeHandPool(), fakeResult(4), 100, 1280, 720);
+    fillDetection(det, makeHandPool(), fakeResult(n), 100, 1280, 720);
+    expect(det.hands).toHaveLength(n);
+    expect(det.hands[n - 1]?.landmarks[0]?.x).toBeCloseTo(0.1 * (n - 1));
+    expect(det.videoWidth).toBe(1280);
+  });
+
+  it('is never capped at two hands (D39): a 4-hand pool keeps all 4', () => {
+    const det = makeDetection();
+    fillDetection(det, makeHandPool(4), fakeResult(4), 100, 1280, 720);
     expect(det.hands).toHaveLength(4);
     expect(det.hands[3]?.landmarks[0]?.x).toBeCloseTo(0.3);
     expect(det.hands[3]?.handedness).toBe('Left');
-    expect(det.videoWidth).toBe(1280);
   });
 });
 
