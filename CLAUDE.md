@@ -74,7 +74,8 @@ working Undo/Redo/Clear/Reset buttons + keys, mode status line, Debug panel dept
 captures / renderer stats + **Leak check** (10× all modes → GPU memory flat). **Post-Phase 4:**
 hand tracking runs in a **Web Worker** (D38; screen stays at 60 FPS while inference runs; auto
 fallback to the main thread; `?vision=main` forces the old path) and all 4 detected hands now reach
-the main-user lock (D39). 122 tests passing.
+the main-user lock (D39). Drawing is capped at 60 fps so it doesn't starve the tracker of GPU
+time (D40). 126 tests passing.
 
 **What does not work yet:** the seven real experiences (placeholders only — Voxel Builder is next),
 Help/Settings panels (buttons only toggle state; settings live in the store with defaults).
@@ -94,7 +95,10 @@ Help/Settings panels (buttons only toggle state; settings live in the store with
    real recordings (`tests/fixtures/landmarks/real/right-only.json`, `left-only.json`,
    `both-crossing.json`, optional `friend-right.json`) and the Debug panel check (friend's right
    hand → `MediaPipe “Right”` or `“Left”`?). With them: score current vs new handedness, then build
-   §7c Layers 1–2. Also ask for the Debug panel Render / Inference numbers after the worker (D38).
+   §7c Layers 1–2. **First, verify the lag fix (D40):** ask for a new Debug-panel recording of the
+   current code with both hands and compare hand updates/s with the 2026-09-25 baseline (current:
+   1 hand 9.2/s, 2 hands 6.2/s; Phase 2: 19.3 / 13.3). If still short, decide `numHands` 4 → 2
+   with the user (the D23 trade-off).
 5. Ask the user about the Phase 4 real-hand check (3D cursor ring follows the fingertip; pinch the
    placeholder shape and drag it; switch modes mid-drag; Leak check button). Earlier pending checks:
    lag fix feel (D30) and Phase 3 gestures (pinch, fist, point, open
@@ -204,6 +208,7 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D37 | Precedence rules implemented: rule 1 via `ModeController.setUiCaptured` (help/settings open → no mode updates, captures dropped); rule 3 via `CaptureManager` callbacks; rule 4 via `releaseAll('modeSwitch')`. Lost hand → `release(side, 'lost')`; identity lock also while `capture.count > 0`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | §11                                                                                                           |
 | D38 | **Hand tracking in a Web Worker** (`workers/visionWorker.ts` + `vision/workerTracker.ts`). User saw 12 FPS; inference blocked the render loop. Main thread: `FrameGate` (new frame + throttle + increasing ts) → `createImageBitmap(video)` → worker (`HandTracker({ moduleWasm: true })`, MediaPipe's ES-module WASM build) → results packed into one `Float32Array` that ping-pongs (no per-frame allocation); max one frame in flight. `WorkerTracker` implements both `TrackerBackend` (status) and `InputSource`. Auto-fallback to the main-thread `HandTracker` + `LiveTrackerSource` if unsupported or the worker errors; `?vision=main` forces it. MediaPipe asset URLs are ABSOLUTE (Vite dev rewrites root-relative dynamic imports to `?import`, which broke the worker). `vite.config` `worker.format: 'es'`. Measured in the pane: worker 60 FPS / worst frame gap 17 ms vs main thread 46 FPS / 34 ms at the same 20 inferences/s | §23 profiling showed main-thread jank                                                                         |
 | D39 | **Bug fix:** `LiveTrackerSource` kept only the first 2 of up to 4 hands MediaPipe reported, so the main-user lock (D23) never saw everyone. Hand pools are now sized to `numHands` (`makeHandPool`, `fillDetection`, wire protocol) and a unit test guards it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Fixtures bypassed that path, so tests missed it                                                               |
+| D40 | **Draws capped at 60 fps** (`TUNING.scene.maxRenderFps`, `FramePacer` in `core/renderLoop.ts`). Only `renderFrame()` is paced; tracking, gestures and modes still run every display frame, and the FPS counter counts draws. Root cause (2026-09-25, user's A/B recordings on a 144 Hz laptop, same camera 1 min apart): current code gave 9.2 / 6.2 hand updates/s with 1 / 2 hands vs Phase 2's 19.3 / 13.3. Since D38 the page redraws up to 144×/s on the same Intel iGPU MediaPipe uses (Phase 2's blocking inference paused drawing). Pane: drawing on → 35 ms per detection, off → 27 ms; 60 fps cap → 30/30 camera frames analysed (was 27, 3 skipped). Smaller second cause left open: `numHands: 4` (D23) runs palm detection every frame even with both hands tracked, and produced phantom 3rd/4th hands                                                                                                                            | User felt lag; A/B showed hand updates halved vs Phase 2                                                      |
 
 ---
 
@@ -561,3 +566,11 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   (D38) since the screenshot showed 12 FPS; found + fixed the 2-of-4 hands bug (D39). Browser-pane
   A/B: worker 60 FPS / 17 ms worst gap vs main 46 FPS / 34 ms. Dev-server gotcha fixed: absolute
   MediaPipe URLs. **Next:** user's recordings + worker FPS check → §7c Layers 1–2 → Phase 5.
+- **2026-09-25 — Session 2 (second laptop).** Set up the user's second laptop: Intel UHD drives a
+  144 Hz panel, plus an RTX 4060; Node 22.16 → 24.19 via winget; Playwright Chromium installed.
+  Fixed a deterministic E2E race (`fe6af71`): tests pressed keys before React attached the keydown
+  listener, so `openApp()` now waits for `__gs_debug.coreCreated`. User reported lag. Analysed their
+  fixture recordings (hand updates/s by hand count; intervals quantized to 144 Hz rAF) and an A/B
+  against Phase 2 in their Chrome, which found the root cause, then capped drawing (D40).
+  **Next:** user re-records the current code to confirm; if still short of Phase 2, decide
+  `numHands` 4 → 2 (D23); then handedness recordings (§7c) → Phase 5.

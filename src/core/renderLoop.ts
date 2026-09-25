@@ -1,4 +1,4 @@
-// The ONE requestAnimationFrame loop (§5) + FPS measurement.
+// The ONE requestAnimationFrame loop (§5) + draw pacing + FPS measurement.
 // Browsers stop rAF in hidden tabs, so render (and later inference) pauses automatically on
 // `visibilitychange`; dt is clamped so resuming never produces a huge step.
 
@@ -36,6 +36,41 @@ export class FpsMeter {
     this.fps = 0;
     this.frames = 0;
     this.windowStart = -1;
+  }
+}
+
+/**
+ * Caps how often the loop DRAWS (D40) while the rest of the frame still runs on every display
+ * frame. Advances on a fixed grid, so the average is exact on any refresh rate (60 of 144 Hz
+ * frames; every frame on a ≤ 60 Hz screen). Allocation-free.
+ */
+export class FramePacer {
+  private intervalMs = 0;
+  private next = -1;
+
+  constructor(maxFps: number = TUNING.scene.maxRenderFps) {
+    this.setMaxFps(maxFps);
+  }
+
+  /** `maxFps` ≤ 0 disables the cap. */
+  setMaxFps(maxFps: number): void {
+    this.intervalMs = maxFps > 0 ? 1000 / maxFps : 0;
+    this.next = -1;
+  }
+
+  /** Call once per display frame. Returns true if this frame should draw. */
+  due(now: number): boolean {
+    const interval = this.intervalMs;
+    if (interval <= 0) return true;
+    if (this.next >= 0 && now < this.next - interval * TUNING.scene.renderPacingSlack) return false;
+    // After a stall (hidden tab, long frame) restart the grid instead of drawing a catch-up burst.
+    this.next =
+      this.next < 0 || now - this.next >= interval ? now + interval : this.next + interval;
+    return true;
+  }
+
+  reset(): void {
+    this.next = -1;
   }
 }
 

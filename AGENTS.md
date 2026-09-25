@@ -73,7 +73,8 @@ src/
   config/     tuning.ts (ALL thresholds + feature flags) · keybindings.ts
   core/       types.ts (shared types + §7 frame contracts)
               camera.ts (P1: CameraManager + permission/capability checks)
-              renderLoop.ts (P1: the one rAF loop + FpsMeter; perf stats extended in P2)
+              renderLoop.ts (P1: the one rAF loop + FpsMeter; perf stats extended in P2;
+              FramePacer caps draws, D40)
               input.ts (P2: RawDetection, InputSource, LiveTrackerSource, FixturePlaybackSource,
               FixtureRecorder, parseFixture — fixtures store tracker-native RawDetections)
   vision/     HandTracker.ts (P2: one HandLandmarker, GPU→CPU, dynamic import)

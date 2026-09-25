@@ -174,6 +174,14 @@ export const TUNING = {
     cameraZ: 20,
     /** Cap devicePixelRatio to keep fill-rate sane on 4K / HiDPI screens. */
     maxPixelRatio: 2,
+    /**
+     * Most draws (WebGL + 2D overlay) per second; 0 = draw on every display frame. Only drawing is
+     * paced — tracking, gestures and modes still run every frame. Uncapped, a 144 Hz screen redraws
+     * each 30 fps camera frame ~5× on the GPU MediaPipe also needs, halving hand updates (D40).
+     */
+    maxRenderFps: 60,
+    /** A display frame up to this fraction of the draw interval early still draws (vsync jitter). */
+    renderPacingSlack: 0.2,
     clearColor: 0x05070b,
     /** Mirror (selfie) view by default; user-toggleable in Settings (Phase 12). */
     mirror: true,

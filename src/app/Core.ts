@@ -13,7 +13,7 @@ import {
   type InputSource,
   type LandmarkFixture,
 } from '@/core/input';
-import { FpsMeter, InferenceStats, RenderLoop } from '@/core/renderLoop';
+import { FpsMeter, FramePacer, InferenceStats, RenderLoop } from '@/core/renderLoop';
 import type {
   GestureFrame,
   HandFrame,
@@ -99,6 +99,7 @@ export class Core {
   private playback: FixturePlaybackSource | null = null;
 
   private readonly fps = new FpsMeter();
+  private readonly drawPacer = new FramePacer();
   private lastFpsPush = 0;
   private lastStatusPush = 0;
   private statusKey = '';
@@ -417,14 +418,18 @@ export class Core {
     f.dt = dt;
     this.modes.update(f);
 
-    // 6. Render: mode passes → camera background + 3D scene → 2D overlay.
-    this.renderFrame();
-
-    // 7. Perf + throttled UI status.
-    if (this.fps.tick(now) && now - this.lastFpsPush >= 1000 / TUNING.ui.statusHz) {
-      this.lastFpsPush = now;
-      useAppStore.getState().setFps(this.fps.fps);
+    // 6. Render: mode passes → camera background + 3D scene → 2D overlay. Only the draw is paced
+    //    (D40) — it shares the GPU with the hand tracker; steps 1–5 run every display frame.
+    if (this.drawPacer.due(now)) {
+      this.renderFrame();
+      // FPS = frames actually drawn.
+      if (this.fps.tick(now) && now - this.lastFpsPush >= 1000 / TUNING.ui.statusHz) {
+        this.lastFpsPush = now;
+        useAppStore.getState().setFps(this.fps.fps);
+      }
     }
+
+    // 7. Throttled UI status.
     this.pushStatus(now);
   };
 
@@ -511,6 +516,7 @@ export class Core {
     this.loop.stop();
     counters.renderLoopsActive--;
     this.fps.reset();
+    this.drawPacer.reset();
     this.inferenceStats.reset();
     this.resetPerception();
     this.overlay.clear();

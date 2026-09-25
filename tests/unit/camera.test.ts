@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { classifyCameraError } from '@/core/camera';
-import { FpsMeter, RenderLoop } from '@/core/renderLoop';
+import { FpsMeter, FramePacer, RenderLoop } from '@/core/renderLoop';
 
 describe('classifyCameraError', () => {
   const dom = (name: string) => new DOMException('msg', name);
@@ -61,5 +61,39 @@ describe('RenderLoop', () => {
     loop.stop();
     expect(loop.running).toBe(false);
     expect(queue).toHaveLength(0);
+  });
+});
+
+describe('FramePacer', () => {
+  /** Draws a pacer allows while a display refreshes at `hz` for `ms` (optional ±jitter ms). */
+  function drawsAt(pacer: FramePacer, hz: number, ms: number, jitter = 0, start = 0): number {
+    let draws = 0;
+    for (let i = 0, t = start; t < start + ms; i++, t = start + (i * 1000) / hz) {
+      if (pacer.due(t + (i % 2 ? jitter : -jitter))) draws++;
+    }
+    return draws;
+  }
+
+  it('holds 60 draws/s on 144 Hz and 120 Hz screens', () => {
+    expect(drawsAt(new FramePacer(60), 144, 1000)).toBeCloseTo(60, -1);
+    expect(Math.abs(drawsAt(new FramePacer(60), 144, 10_000) - 600)).toBeLessThanOrEqual(1);
+    expect(drawsAt(new FramePacer(60), 120, 1000)).toBe(60);
+  });
+
+  it('never drops frames on a 60 Hz or slower screen, even with vsync jitter', () => {
+    expect(drawsAt(new FramePacer(60), 60, 1000, 0.8)).toBe(60);
+    expect(drawsAt(new FramePacer(60), 59.9, 10_000)).toBe(599);
+    expect(drawsAt(new FramePacer(60), 30, 1000)).toBe(30);
+  });
+
+  it('does not burst after a stall (hidden tab, long frame)', () => {
+    const p = new FramePacer(60);
+    drawsAt(p, 144, 500);
+    // 5 s later the display resumes at 144 Hz: 100 ms should still hold ~6 draws, not 14.
+    expect(drawsAt(p, 144, 100, 0, 5500)).toBeLessThanOrEqual(7);
+  });
+
+  it('draws every frame when uncapped', () => {
+    expect(drawsAt(new FramePacer(0), 144, 1000)).toBe(144);
   });
 });
