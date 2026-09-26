@@ -5,7 +5,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TUNING } from '@/config/tuning';
 import { parseFixture } from '@/core/input';
@@ -13,6 +13,7 @@ import type { Vec2 } from '@/core/types';
 import type { VoxelMode } from '@/modes/voxel/VoxelMode';
 import { pipelineRig, VIEW_H } from '../fixtures/modeHarness';
 import {
+  fistTurnScenario,
   pinchDragScenario,
   twoHandStretchScenario,
   voxelPullScenario,
@@ -118,7 +119,29 @@ describe('Voxel Builder end to end (synthetic hands through the full pipeline)',
   });
 });
 
-describe('Voxel Builder: two-hand grab (Phase 6, §12)', () => {
+describe('Voxel Builder: moving and turning the structure (Phase 6)', () => {
+  it('make a fist and move it right and down: the structure spins round and tips, in place', () => {
+    const app = voxelApp();
+    app.play(pinchDragScenario()); // a row of voxels
+    const count = app.mode.grid.count;
+    const q0 = app.root.quaternion.clone();
+    const box = new THREE.Box3().setFromObject(
+      app.root.getObjectByName('Voxels:solid') ?? app.root,
+    );
+    const middle = box.getCenter(new THREE.Vector3());
+    const middleLocal = app.root.worldToLocal(middle.clone());
+    app.play(fistTurnScenario());
+    // The turn itself, in the screen's frame: the front went right, the top came toward you.
+    const turn = app.root.quaternion.clone().multiply(q0.clone().invert());
+    expect(new THREE.Vector3(0, 0, 1).applyQuaternion(turn).x).toBeGreaterThan(0.3);
+    expect(new THREE.Vector3(0, 1, 0).applyQuaternion(turn).z).toBeGreaterThan(0.2);
+    expect(app.root.localToWorld(middleLocal.clone()).distanceTo(middle)).toBeLessThan(0.05);
+    expect(app.mode.grid.count).toBe(count); // a fist never builds
+    expect(app.labels.at(-1)).toBe('Turn structure');
+    app.mc.undo();
+    expect(app.root.quaternion.equals(q0)).toBe(true);
+  });
+
   it('both hands pinch and spread: no jump when it starts, the structure grows and turns, one undo step', () => {
     const app = voxelApp();
     const start = app.root.matrixWorld.clone();

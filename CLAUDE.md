@@ -99,14 +99,17 @@ grab starts, each pinch stays on the same spot of the object, one undo step per 
 structure"; Reset view is undoable too), a lost hand freezes the object and re-anchors on return,
 nearly touching / crossing hands no longer flip or blow up the structure (user's crossing recording:
 161° → 1°), safety limits above the fastest real grab. Voxel Builder uses it; Panel / Filter Lab /
-Portal / Object Lab will. 214 tests + 7 E2E passing.
+Portal / Object Lab will. **Fist + drag turns the structure in 3D** (D51, the user's choice): move
+a fist left / right to spin it round, up / down to tip it, about the middle of the voxels; one undo
+step ("Turn structure"); a brief or still fist does nothing, so a relaxed hand never blocks
+building. 222 tests + 7 E2E passing.
 
 **What does not work yet:** the other five experiences (placeholders — Phase 7 Spatial Panel next),
 Help/Settings panels (buttons only toggle state; settings live in the store with defaults), saving
 scenes (Phase 12).
 
-**Pushed to GitHub:** yes — everything up to `ba40b4d` (lag fix) was pushed by the user on
-2026-09-24. Later commits: check with `git status` (the user pushes manually with `git push`).
+**Pushed to GitHub:** yes — everything up to `3dba1b7` (Air Draw fist eraser) was pushed by the user
+by 2026-09-27. Later commits: check with `git status` (the user pushes manually with `git push`).
 
 ---
 
@@ -145,6 +148,9 @@ scenes (Phase 12).
    (`twoHand.maxMoveRate` / `maxScaleRate` / `maxTurnRate`) or does turning feel dead with the
    hands close (`twoHand.turnFade`)? A recording of a few deliberate two-hand grabs (Debug →
    Record) would let us tune on intentional grabs (the only real two-hand data is the crossing file).
+   **Fist + drag (D51):** make a fist and move it — does the structure spin / tip the way they
+   expect, is the speed right (`orbit.radPerViewHeight`: whole picture width ≈ one turn), does the
+   turn start soon enough (`orbit.holdMs` 150 ms + `orbit.deadZone` ~22 px) and never by accident?
 8. **Order from here (D46): Phase 7 next, then 9 → 10…** Phase 7 is **Spatial Panel + Texture
    Surface** (§7 below): `modes/shared/TextureSurface.ts` + `modes/panel/PanelMode.ts`; the panel's
    two-hand capture / move / stretch / rotate uses `TwoHandTransform` (capture zone = panel bounds +
@@ -261,6 +267,7 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D48 | **Air Draw: point to draw** (user, 2026-09-26, after trying pinch-to-draw: "not very smooth"; replaces the spec's pinch and D47's steady-aim pen): the pen is the dominant hand's INDEX fingertip while the `point` gesture is active (index out, others curled); lowering the finger or opening the hand lifts it; the eraser works the same way; pinch no longer draws. Stroke points come only from new tracker readings (`hands.inferenceTimestamp` changed), never the predicted in-between positions, which overshoot on turns: on 212 real 1.5 s motion windows the drawn line's distance from the true path fell 3.8 / 22 → 1.7 / 10 px (median / p90). Centripetal Catmull-Rom was no better than uniform (1.65 vs 1.68 px wiggle), so uniform stays. The fingertip dot still moves at 60 Hz                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | User: pinch drawing was not smooth; wants the fingertip to draw                                               |
 | D49 | **Air Draw: other-hand fist = eraser** (user, 2026-09-26): while the non-dominant hand's `grab` (fist: the four fingertips curled — the thumb may be out) is active, the drawing hand's index fingertip erases every stroke it touches, pointing or not; one fist = one undo step. A fist that drops out ≤ 150 ms (`draw.fistGraceMs`) still counts. Strokes under the fingertip when the fist closes (e.g. the line just finished) are spared until the fingertip leaves them. After a stroke or erase a new line needs a fresh point (finger lowered first), so opening the fist with the finger out never starts a stray line. Eraser reach 0.02 → 0.03 of the video height (wiping). The Eraser tool (X) + pointing stays as the button / key equivalent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | User's request: erase with a left fist while the right hand moves                                             |
 | D50 | **Two-hand transform** (§12, Phase 6): `modes/shared/TwoHandTransform.ts` — `TwoHandTransform` (begin / update / cancel; capture `'twoHand'`), `transformCommand` (TransformObjectCommand), pose helpers. The object scales and turns about the hands' midpoint and follows it (each pinch point stays on the same spot of the object, < 1 px, tested); one grab = one undo step however it ends (let go, hand lost, undo, mode switch, UI); Reset view is an undo step too ('Reset view'), else Ctrl+Z after a reset jumped to an old pose. Deviations from §12's formulas, measured on the user's crossing recording (9 real grabs): (a) hands closer than `minSpan` 0.15 view heights don't scale (a grab begun 0.05 apart read 10.6×); (b) turning fades out from 0.25 to 0.08 apart and accumulates per frame instead of baseline + rotation (hands passing each other flip the hand line: the old transform turned the structure 161°, now 1°); (c) per-frame clamps are per-second rate limits (modes run at 60–144 Hz): move 5 view heights/s, size 15 ln/s, turn 12 rad/s, above the fastest real grab (2.9 / 13 / 10) so real hands are never slowed, while a one-frame 0.7-view-height glitch is a 60 px blip; (d) a hand in its loss grace freezes the object and the grab re-anchors when it returns (no jump); (e) tilt from hand height / depth (off by default in §12) not built. Width-only mode built for the strip experiences | Spec §12; the user's crossing recording showed the flip / blow-up                                             |
+| D51 | **Fist + drag turns in 3D** (user, 2026-09-27: "what if I want to move them 3D?" — the two-hand grab only works in the screen's plane; they chose this over two-hand depth steering): `FistOrbit` in `modes/shared/TwoHandTransform.ts`. A fist (`grab`, either hand, building hand first) moved right turns the front right (about the screen's up axis), moved down tips the top toward you (about the screen's across axis), about the middle of the voxels' bounding box; absolute from where the turn started, so going back undoes it; `orbit.radPerViewHeight` 3.5 (the whole picture width ≈ one turn), rate limit 12 rad/s; lost hand = freeze + re-anchor; one undo step ('Turn structure'). It starts only after the fist is held 150 ms AND moved 0.03 view heights (then re-anchors, no jump): in the user's recordings accidental fists (mid-motion) lasted 133–250 ms and moved 0.015–0.045, deliberate ones 0.75–2.4 s and 0.05–0.22; the two brief ones went from 7–9° of turn to 0°. Only a turning fist blocks building (a relaxed hand read as a fist must not)                                                                                                                                                                                                                                                                                                                                                               | User asked to rotate the structure in 3D                                                                      |
 
 ---
 
@@ -516,18 +523,23 @@ handleAction`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_MET
   (`ModeTools`: one component per built experience, reading `useAppStore((s) => s.modeUi.<id>)`).
 - `src/modes/voxel/` (Phase 5): `VoxelMode` (tools, strokes = `VoxelEdit` → one command, push/pull,
   layer dial, Depth Lock, two-hand grab = `TwoHandTransform` on voxelRoot (`updateTwoHand` applies
-  §11 rule 2, then `begin()`), undoable Reset view, publishes `VoxelUiState`;
+  §11 rule 2, then `begin()`), fist turn = `FistOrbit` about the voxels' middle (`updateOrbit`;
+  only `turning`, not a resting fist, blocks building), undoable Reset view, publishes `VoxelUiState`;
   `grid` is public), `VoxelGrid` (packed-key occupancy, `listener`, `VoxelEdit`, `VoxelEditCommand`,
   `clearCommand`), `VoxelRenderer` (`InstanceBatch` per material with capacity doubling,
   `GhostVoxel` single cell / column, `BuildPlaneGrid`, `VoxelPickTarget` = the cursor target),
   `voxelMath` (`lineCells`, `raycastGrid`, `rayPlanePoint`, `inPlaneDistance`, `LayerDial`, cell
   helpers). Scene names used by tests: `Mode:voxel`, `Voxels:<material>`, `VoxelGhost`.
-- `src/modes/shared/TwoHandTransform.ts` (Phase 6, D50): `TwoHandTransform(object, { id, label,
-scaleRange?, widthOnly?, onEnd? })` — the experience calls `begin(ctx, twoHand, now)` on
+- `src/modes/shared/TwoHandTransform.ts` (Phase 6, D50 + D51):
+  `TwoHandTransform(object, { id, label, scaleRange?, widthOnly?, onEnd? })` — the experience calls `begin(ctx, twoHand, now)` on
   `twoHand.justStarted` when the pinch is on its object, then `update(frame)` every frame;
   `active` / `frozen` getters; `cancel()` ends a grab keeping it as an undo step. Also `Pose`,
   `makePose` / `readPose` / `applyPose` / `samePose`, `transformCommand`, `turnWeight`. The
   object's parent must be the scene (poses are world space). Tunables: `TUNING.twoHand`.
+  `FistOrbit(object, { id, label })`: `begin(ctx, side, hand, pivot, now)` on that hand's
+  `grab.justStarted`, then `update(frame)`; `active` (a fist is held) vs `turning` (past hold + dead
+  zone), `side`, `cancel()`, `onSidesSwapped()`; `palmCenterInto`. Tunables: `TUNING.orbit`. Test
+  helper `movePalm(hand, x, y)` in `modeHarness.ts`; synthetic `fistTurnScenario`.
 - `src/modes/draw/` (Phase 8): `DrawMode` (pen = the index fingertip while `point` is active, D48;
   the other hand's `grab` = eraser with grace + spared strokes + `penArmed` fresh-point rule, D49;
   points added only when `hands.inferenceTimestamp` changes; pen / eraser strokes hold a capture; `strokeList`; publishes `DrawUiState`; draws in
@@ -746,3 +758,10 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   lets go, and Ctrl+Z restores it exactly. Sabotage checks: no re-anchor, no freeze, no turn fade,
   no spread floor, no move limit, no undo step, or the old low limits each fail a test.
   **Next:** user's two-hand check (§3 step 7) → Phase 7.
+- **2026-09-27 — Session 2 (cont.). Fist + drag turns the structure in 3D (D51).** The user
+  pointed out the two-hand grab is 2D only ("what if I want to move them 3D?"); offered fist + drag
+  vs two-hand depth steering, they chose fist + drag. Replaying their three recordings found 4
+  fists that would have turned the structure by accident; profiling all 9 fists gave the 150 ms
+  hold + 22 px dead zone (brief accidental ones now turn 0°). Sabotage checks: no hold / dead zone,
+  a resting fist blocking building, turning about the origin, the wrong direction, no re-anchor,
+  no turn limit each fail a test. **Next:** user's two-hand + fist check (§3 step 7) → Phase 7.

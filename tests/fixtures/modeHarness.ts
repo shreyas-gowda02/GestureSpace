@@ -25,7 +25,16 @@ import { CoordinateMapper, RaycastCursor } from '@/spatial/CoordinateMapper';
 import { DepthEstimator } from '@/spatial/DepthEstimator';
 import { ViewportMapper } from '@/spatial/ViewportMapper';
 import { HandNormalizer } from '@/vision/handPipeline';
-import { INDEX_TIP, makeLandmarkBuffer, THUMB_TIP } from '@/vision/landmarks';
+import {
+  INDEX_MCP,
+  INDEX_TIP,
+  makeLandmarkBuffer,
+  MIDDLE_MCP,
+  PINKY_MCP,
+  RING_MCP,
+  THUMB_TIP,
+  WRIST,
+} from '@/vision/landmarks';
 
 export const VIEW_W = 1280;
 export const VIEW_H = 720;
@@ -88,6 +97,18 @@ export function makeHand(side: HandSide, x = 0.5, y = 0.5): TrackedHand {
 export function movePinchPoint(hand: TrackedHand, x: number, y: number): void {
   const lms = hand.landmarks as { x: number; y: number; z: number }[];
   for (const i of [THUMB_TIP, INDEX_TIP]) {
+    const p = lms[i];
+    if (p) {
+      p.x = x;
+      p.y = y;
+    }
+  }
+}
+
+/** Put the middle of the palm (wrist + four knuckles, what a fist drag follows) at view (x, y). */
+export function movePalm(hand: TrackedHand, x: number, y: number): void {
+  const lms = hand.landmarks as { x: number; y: number; z: number }[];
+  for (const i of [WRIST, INDEX_MCP, MIDDLE_MCP, RING_MCP, PINKY_MCP]) {
     const p = lms[i];
     if (p) {
       p.x = x;

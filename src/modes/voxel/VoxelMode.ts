@@ -5,8 +5,8 @@
 //  • Depth changes only on purpose (Depth Lock, on by default): non-dominant pinch + up/down,
 //    Q / E, ±Z buttons. Unlocked (experimental), the dominant hand's depth picks the layer.
 //  • Build / Erase / Paint, 8 colours, solid / glass / glow; two-hand pinch moves, turns and scales
-//    the whole structure (TwoHandTransform, one undo step) — the grid stays in local integer cells,
-//    so alignment is always exact.
+//    the whole structure (TwoHandTransform) and a fist + drag turns it in 3D (FistOrbit), each one
+//    undo step — the grid stays in local integer cells, so alignment is always exact.
 
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
@@ -27,6 +27,7 @@ import { StepQuantizer } from '@/spatial/DepthEstimator';
 import { clamp } from '@/utils/math';
 import {
   applyPose,
+  FistOrbit,
   makePose,
   readPose,
   samePose,
@@ -58,6 +59,7 @@ const V = TUNING.voxel;
 const STROKE_ID = 'voxel-stroke';
 const DIAL_ID = 'voxel-layer-dial';
 const ROOT_ID = 'voxel-root';
+const ORBIT_ID = 'voxel-orbit';
 
 const LABEL: Record<VoxelTool, string> = {
   build: 'Add voxels',
@@ -127,6 +129,8 @@ export class VoxelMode implements SpatialMode {
   private readonly dialer = new LayerDial(V.LAYER_STEP_DISTANCE);
   /** Two-hand pinch: moves / turns / scales the whole structure (voxelRoot). */
   private transform: TwoHandTransform | null = null;
+  /** Fist + drag: turns the whole structure in 3D about its middle. */
+  private orbit: FistOrbit | null = null;
   /** Depth Lock off: dominant-hand depth → layer, relative to where it was when last rebased. */
   private unlockBase = NaN;
   private unlockLayer = 0;
@@ -176,7 +180,8 @@ export class VoxelMode implements SpatialMode {
     this.now = frame.timestamp;
 
     this.updateTwoHand(frame);
-    const allowed = singleHandPinchAllowed(frame.gestures) && !this.moving;
+    this.updateOrbit(frame);
+    const allowed = singleHandPinchAllowed(frame.gestures) && !this.moving && !this.turning;
 
     // The building hand (dominant, or whichever hand holds the stroke).
     const side = this.stroke?.side ?? frame.dominant;
@@ -235,6 +240,7 @@ export class VoxelMode implements SpatialMode {
   }
 
   onSidesSwapped(): void {
+    this.orbit?.onSidesSwapped();
     if (this.stroke) this.stroke.side = other(this.stroke.side);
     if (this.dial) this.dial.side = other(this.dial.side);
   }
@@ -255,6 +261,7 @@ export class VoxelMode implements SpatialMode {
     const { ctx, root } = this;
     if (!root) return;
     this.transform?.cancel();
+    this.orbit?.cancel();
     const before = readPose(root, makePose());
     this.defaultView(root);
     const after = readPose(root, makePose());
@@ -267,6 +274,7 @@ export class VoxelMode implements SpatialMode {
     this.endStroke(true);
     this.dial = null;
     this.transform?.cancel();
+    this.orbit?.cancel();
     this.renderer?.ghost.hide();
     if (this.root) this.root.visible = false;
   }
@@ -495,7 +503,7 @@ export class VoxelMode implements SpatialMode {
   /** Depth Lock off (experimental, §13.5): the dominant hand's depth estimate picks the layer. */
   private updateUnlockedDepth(frame: InteractionFrame): void {
     const g = frame.gestures[frame.dominant];
-    const busy = this.stroke || this.dial || this.moving;
+    const busy = this.stroke || this.dial || this.moving || this.turning;
     if (this.depthLock || busy || !g || !frame.hands[frame.dominant]) {
       this.unlockBase = NaN;
       return;
@@ -535,6 +543,56 @@ export class VoxelMode implements SpatialMode {
     transform.update(frame);
   }
 
+  // --- fist + drag: turn the structure in 3D --------------------------------------------------
+
+  /** Only a fist that is really turning counts (a resting fist must not block building). */
+  private get turning(): boolean {
+    return this.orbit?.turning ?? false;
+  }
+
+  /** A fist (either hand, the building hand first) starts turning, unless something else is busy. */
+  private updateOrbit(frame: InteractionFrame): void {
+    const { ctx, orbit } = this;
+    if (!ctx || !orbit) return;
+    if (!orbit.active && !this.moving && !this.stroke && !this.dial) {
+      for (const side of [frame.dominant, other(frame.dominant)]) {
+        const hand = frame.hands[side];
+        if (!hand || !frame.gestures[side]?.grab.justStarted) continue;
+        if (orbit.begin(ctx, side, hand, this.middle(), this.now)) break;
+      }
+    }
+    orbit.update(frame);
+  }
+
+  /** The middle of the voxels in world space (the structure turns in place), else its origin. */
+  private middle(): THREE.Vector3 {
+    const { grid, root } = this;
+    const out = this.v3;
+    if (!root) return out.set(0, 0, 0);
+    if (grid.count === 0) return out.copy(root.position);
+    let x0 = Infinity,
+      y0 = Infinity,
+      z0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity,
+      z1 = -Infinity;
+    grid.forEach((k) => {
+      const x = grid.keyX(k);
+      const y = grid.keyY(k);
+      const z = grid.keyZ(k);
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    });
+    const s = V.voxelSize;
+    return root.localToWorld(
+      out.set(((x0 + x1) / 2) * s, ((y0 + y1) / 2) * s, ((z0 + z1) / 2) * s),
+    );
+  }
+
   // --- feedback --------------------------------------------------------------------------------
 
   private updateGhost(): void {
@@ -549,6 +607,7 @@ export class VoxelMode implements SpatialMode {
     } else if (
       !s &&
       !this.moving &&
+      !this.turning &&
       !this.dial &&
       this.hasAim &&
       this.target(this.tool, this.cell)
@@ -567,6 +626,7 @@ export class VoxelMode implements SpatialMode {
     let text: string;
     if (this.transform?.frozen) text = 'Hand lost — the structure holds still until it is back';
     else if (this.moving) text = 'Moving the structure — let go of both pinches to drop it';
+    else if (this.turning) text = 'Turning the structure — move your fist; open your hand to stop';
     else if (s?.kind === 'extrude') text = `Extruding ${s.extrude} — push / pull, release to place`;
     else if (s) text = STROKE_TEXT[s.tool];
     else if (this.dial) text = `Depth layer ${layer} — move your ${this.dial.side} hand up / down`;
@@ -608,6 +668,7 @@ export class VoxelMode implements SpatialMode {
       label: 'Move structure',
       scaleRange: V.rootScale,
     });
+    this.orbit = new FistOrbit(root, { id: ORBIT_ID, label: 'Turn structure' });
     this.depthLock = ctx.settings.depthLockDefault;
     this.defaultView(root);
   }

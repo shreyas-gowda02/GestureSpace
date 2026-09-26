@@ -20,7 +20,7 @@ import {
 } from '@/modes/voxel/voxelMath';
 import { RaycastCursor } from '@/spatial/CoordinateMapper';
 import { INDEX_MCP, INDEX_TIP } from '@/vision/landmarks';
-import { ModeRig } from '../fixtures/modeHarness';
+import { ModeRig, movePalm } from '../fixtures/modeHarness';
 import { makeRng } from '../fixtures/syntheticHands';
 
 const SOLID: VoxelValue = { color: 0x21d4d8, material: 'solid' };
@@ -604,6 +604,26 @@ describe('VoxelMode: two hands, tools, lifecycle', () => {
     expect(root.position.distanceTo(before)).toBeLessThan(1e-9);
     expect(root.quaternion.angleTo(tilt)).toBeLessThan(1e-6);
     expect(root.scale.x).toBe(1);
+  });
+
+  it('a resting fist of the other hand never blocks building; a turning fist does', () => {
+    const { rig, mode, root } = voxelRig();
+    movePalm(rig.show('left', 0.3, 0.6), 0.3, 0.6);
+    rig.grab('left', true); // a relaxed hand read as a fist, not moving
+    rig.run(30);
+    stroke(rig, root, { x: 0, y: 0, z: 0 });
+    expect(mode.grid.count).toBe(1);
+    // Now it moves: it turns the structure, and the building hand waits.
+    for (let i = 1; i <= 20; i++) {
+      movePalm(rig.show('left', 0.3, 0.6), 0.3 + (0.1 * i) / 20, 0.6);
+      rig.step();
+    }
+    expect(rig.statuses.at(-1)).toMatch(/Turning the structure/);
+    stroke(rig, root, { x: 3, y: 0, z: 0 });
+    expect(mode.grid.count).toBe(1);
+    rig.grab('left', false);
+    rig.step();
+    expect(rig.mc.history?.undoLabel).toBe('Turn structure');
   });
 
   it('grid alignment stays exact after 1,000+ placements and many group transforms', () => {

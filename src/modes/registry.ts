@@ -41,7 +41,8 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
       { gesture: 'Non-dominant pinch + up/down', action: 'Change active Z layer' },
       { gesture: '+Z / −Z (E / Q)', action: 'Precise depth' },
       { gesture: 'Depth Lock (L)', action: 'Prevent accidental Z changes' },
-      { gesture: 'Two-hand pinch', action: 'Move / rotate / scale the structure' },
+      { gesture: 'Two-hand pinch', action: 'Move / twist / resize the structure' },
+      { gesture: 'Fist + move', action: 'Turn the structure in 3D (spin round / tip)' },
     ],
   },
   panel: {

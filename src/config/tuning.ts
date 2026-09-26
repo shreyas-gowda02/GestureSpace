@@ -197,6 +197,25 @@ export const TUNING = {
     maxTurnRate: 12,
   },
 
+  /**
+   * Fist + drag turns an object in 3D (`FistOrbit`): left / right spins it round (about the
+   * screen's up axis), up / down tips it (about the screen's across axis), like dragging with a
+   * mouse in a 3D viewer. Sweeping the fist across the whole picture (1.78 view heights) ≈ one turn.
+   */
+  orbit: {
+    /** Radians of turn per view height of fist travel. */
+    radPerViewHeight: 3.5,
+    /**
+     * A fist starts turning only once held this long AND moved `deadZone` view heights (~22 px at
+     * 720p) from where it closed. The user's recordings: accidental fists (mid-motion) lasted
+     * 133–250 ms and moved 0.015–0.045; deliberate ones 0.75–2.4 s, moving 0.05–0.22.
+     */
+    holdMs: 150,
+    deadZone: 0.03,
+    /** Safety limit, radians per second (a fast real fist drag ≈ 10). */
+    maxTurnRate: 12,
+  },
+
   depth: {
     W_PALM: 0.6,
     W_MPZ: 0.4,

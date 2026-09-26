@@ -233,6 +233,21 @@ export function voxelPullScenario(): LandmarkFixture {
   });
 }
 
+/**
+ * Voxel Builder 3D turn: right hand makes a fist (0.6 s), holds still (to 1.0 s), moves right and
+ * down in the view (1.0–2.2 s), opens (2.6 s).
+ */
+export function fistTurnScenario(): LandmarkFixture {
+  return scenario('fist-turn', 3.2, 30, (t) => {
+    const k = ramp(t, 1.0, 1.2);
+    return [
+      rawHand('right', placeHand(poseAt(t, [[0, 'open'], [0.6, 'fist'], [2.6, 'open']]), {
+        side: 'right', wristX: 0.4 - 0.12 * k, wristY: 0.7 + 0.08 * k, palm: 0.16,
+      })),
+    ];
+  });
+}
+
 /** Right hand cycles every single-hand gesture (for detector + status tests / demos). */
 export function gestureTourScenario(): LandmarkFixture {
   const keys = [

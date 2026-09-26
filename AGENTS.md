@@ -92,7 +92,8 @@ src/
               materials.ts (P4: lighting, CursorMarker, highlight; P11 selection outline)
   modes/      registry.ts (meta + factories) · types.ts (P4: SpatialMode, ModeContext)
               ModeController.ts (P4) · PlaceholderMode.ts (P4, temporary until P11)
-    shared/   history.ts (P4: CommandHistory) · TwoHandTransform.ts (P6)
+    shared/   history.ts (P4: CommandHistory) · TwoHandTransform.ts (P6: two-hand grab + fist
+              orbit, undoable)
               TextureSurface.ts (P7: surface + TextureSources) · glsl.ts (P1: coverUv, mirror, hsv)
     voxel/    VoxelMode.ts · VoxelGrid.ts (grid + commands) · VoxelRenderer.ts (instancing, ghost,
               build-plane grid) · voxelMath.ts (DDA line, face extrusion, layer stepping)   (P5)

@@ -1,5 +1,6 @@
-// Two-hand transform (§12, Phase 6): real TwoHandTracker states from two moving pinch points drive
-// the shared controller; checks are in screen pixels, where the user sees them.
+// Hand transforms (Phase 6). TwoHandTransform (§12): real TwoHandTracker states from two moving
+// pinch points drive the shared controller; checks are in screen pixels, where the user sees them.
+// FistOrbit: a fist dragged across the view turns an object in 3D.
 
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
@@ -9,6 +10,7 @@ import { makeGestureState } from '@/gestures/stateMachine';
 import { TwoHandTracker } from '@/gestures/twoHand';
 import { CommandHistory } from '@/modes/shared/history';
 import {
+  FistOrbit,
   makePose,
   readPose,
   samePose,
@@ -18,7 +20,15 @@ import {
 } from '@/modes/shared/TwoHandTransform';
 import type { ModeContext } from '@/modes/types';
 import type { ReleaseReason } from '@/spatial/CaptureManager';
-import { baseContext, makeHand, movePinchPoint, VIEW_H, VIEW_W } from '../fixtures/modeHarness';
+import {
+  baseContext,
+  makeHand,
+  makeHandGestures,
+  movePalm,
+  movePinchPoint,
+  VIEW_H,
+  VIEW_W,
+} from '../fixtures/modeHarness';
 
 const T = TUNING.twoHand;
 const ASPECT = VIEW_W / VIEW_H;
@@ -357,5 +367,183 @@ describe('TwoHandTransform (§12)', () => {
     expect(turnWeight((T.turnFade.none + T.turnFade.full) / 2)).toBeCloseTo(0.5);
     expect(turnWeight(T.turnFade.full)).toBe(1);
     expect(turnWeight(1)).toBe(1);
+  });
+});
+
+/**
+ * One hand making a fist with its palm at `p` (view), turning `object` about `pivot`. `arm()` holds
+ * the fist still past `holdMs`, then moves it just past the dead zone: turning starts from there,
+ * so `o` is where the turn is measured from.
+ */
+function orbitRig(pivot = new THREE.Vector3()) {
+  const base = baseContext();
+  const history = new CommandHistory();
+  const ctx: ModeContext = { ...base, history };
+  const object = new THREE.Group();
+  base.scene.add(object);
+  const orbit = new FistOrbit(object, { id: 'thing', label: 'Turn thing' });
+  const hand = makeHand('right');
+  const g = makeHandGestures();
+  g.grab.phase = 'active';
+  const frame: InteractionFrame = {
+    timestamp: 0,
+    dt: DT,
+    hands: { timestamp: 0, inferenceTimestamp: 0, right: hand },
+    gestures: { right: g, twoHand: new TwoHandTracker().state },
+    cursors: {},
+    dominant: 'right',
+    activeMode: 'voxel',
+  };
+  const p: Vec2 = { x: 0.5, y: 0.5 };
+  const o: Vec2 = { x: 0.5, y: 0.5 };
+  let now = 0;
+  movePalm(hand, p.x, p.y);
+  const step = (): void => {
+    now += DT * 1000;
+    movePalm(hand, p.x, p.y);
+    frame.timestamp = now;
+    orbit.update(frame);
+  };
+  const close = (): void => {
+    movePalm(hand, p.x, p.y);
+    orbit.begin(ctx, 'right', hand, pivot, now);
+  };
+  const arm = (): void => {
+    for (let i = 0; i < Math.ceil(TUNING.orbit.holdMs / (DT * 1000)) + 1; i++) step();
+    p.x += (TUNING.orbit.deadZone * 1.2) / ASPECT;
+    step();
+    o.x = p.x;
+    o.y = p.y;
+  };
+  /** Where an object-local direction points now, in world space. */
+  const dir = (x: number, y: number, z: number): THREE.Vector3 =>
+    new THREE.Vector3(x, y, z).applyQuaternion(object.quaternion);
+  return { orbit, ctx, history, object, hand, g, frame, p, o, step, close, arm, dir };
+}
+
+const K = TUNING.orbit.radPerViewHeight;
+const noTurn = (o: THREE.Object3D): number => o.quaternion.angleTo(new THREE.Quaternion());
+
+describe('FistOrbit (fist + drag turns in 3D)', () => {
+  it('fist right: the front turns right; fist down: the top tips toward you; back again: as it was', () => {
+    const rig = orbitRig();
+    rig.close();
+    rig.arm();
+    expect(rig.orbit.turning).toBe(true);
+    expect(noTurn(rig.object)).toBe(0); // the dead zone never shows as a jump
+    for (let i = 1; i <= 30; i++) {
+      rig.p.x = rig.o.x + (0.1 * i) / 30; // 0.18 view heights right
+      rig.step();
+    }
+    const front = rig.dir(0, 0, 1);
+    expect(front.x).toBeCloseTo(Math.sin(0.1 * ASPECT * K), 6);
+    expect(front.y).toBeCloseTo(0, 6);
+    for (let i = 1; i <= 30; i++) {
+      rig.p.x = rig.o.x + 0.1 - (0.1 * i) / 30;
+      rig.p.y = rig.o.y + (0.1 * i) / 30; // back, then down
+      rig.step();
+    }
+    expect(rig.dir(0, 1, 0).z).toBeCloseTo(Math.sin(0.1 * K), 6); // the top toward the camera
+    expect(rig.dir(0, 0, 1).x).toBeCloseTo(0, 6);
+    rig.p.y = rig.o.y;
+    for (let i = 0; i < 10; i++) rig.step();
+    expect(noTurn(rig.object)).toBeLessThan(1e-9);
+  });
+
+  it('a brief fist, or one held still, turns nothing (accidental fists)', () => {
+    const brief = orbitRig();
+    brief.close();
+    for (let i = 1; i <= 8; i++) {
+      brief.p.x = 0.5 + (0.1 * i) / 8; // moves a lot, but only for 133 ms…
+      brief.step();
+    }
+    brief.g.grab.phase = 'released';
+    brief.step();
+    expect(noTurn(brief.object)).toBe(0);
+    expect(brief.history.canUndo).toBe(false);
+
+    const still = orbitRig();
+    still.close();
+    for (let i = 0; i < 60; i++) {
+      still.p.x = 0.5 + (i % 2 ? 0.01 : 0); // …or held for a second with a little tremor
+      still.step();
+    }
+    expect(still.orbit.active).toBe(true);
+    expect(still.orbit.turning).toBe(false);
+    expect(noTurn(still.object)).toBe(0);
+  });
+
+  it('turns about the pivot: the middle of the structure stays where it is', () => {
+    const pivot = new THREE.Vector3(3, -2, 1);
+    const rig = orbitRig(pivot);
+    rig.object.position.set(1, 1, 0);
+    rig.object.updateMatrixWorld();
+    const middle = rig.object.worldToLocal(pivot.clone());
+    rig.close();
+    rig.arm();
+    for (let i = 1; i <= 30; i++) {
+      rig.p.x = rig.o.x + (0.08 * i) / 30;
+      rig.p.y = rig.o.y - (0.06 * i) / 30;
+      rig.step();
+    }
+    expect(noTurn(rig.object)).toBeGreaterThan(0.3);
+    expect(rig.object.localToWorld(middle.clone()).distanceTo(pivot)).toBeLessThan(1e-9);
+  });
+
+  it('opening the hand ends it as one undo step; undo restores it exactly', () => {
+    const rig = orbitRig();
+    rig.close();
+    rig.arm();
+    for (let i = 1; i <= 20; i++) {
+      rig.p.x = rig.o.x + (0.1 * i) / 20;
+      rig.step();
+    }
+    const turned = rig.object.quaternion.clone();
+    rig.g.grab.phase = 'released';
+    rig.step();
+    expect(rig.orbit.active).toBe(false);
+    expect(rig.history.undoLabel).toBe('Turn thing');
+    rig.history.undo();
+    expect(noTurn(rig.object)).toBeLessThan(1e-9);
+    rig.history.redo();
+    expect(rig.object.quaternion.angleTo(turned)).toBeLessThan(1e-9);
+  });
+
+  it('a lost hand freezes the turn and re-anchors on return; a rename keeps the same hand turning', () => {
+    const rig = orbitRig();
+    rig.close();
+    rig.arm();
+    for (let i = 1; i <= 10; i++) {
+      rig.p.x = rig.o.x + (0.05 * i) / 10;
+      rig.step();
+    }
+    const frozen = rig.object.quaternion.clone();
+    rig.hand.lostForMs = 50;
+    rig.p.x = 0.8;
+    rig.step();
+    expect(rig.object.quaternion.angleTo(frozen)).toBe(0);
+    rig.hand.lostForMs = 0;
+    rig.step(); // back somewhere else: carries on from here
+    expect(rig.object.quaternion.angleTo(frozen)).toBe(0);
+    // The pipeline renames the hand (D42): same hand, now called left.
+    rig.frame.hands.left = rig.hand;
+    rig.frame.gestures.left = rig.g;
+    rig.frame.hands.right = undefined;
+    rig.frame.gestures.right = undefined;
+    rig.ctx.capture.swapSides();
+    rig.orbit.onSidesSwapped();
+    rig.p.x = 0.85;
+    for (let i = 0; i < 10; i++) rig.step();
+    expect(rig.orbit.side).toBe('left');
+    expect(rig.object.quaternion.angleTo(frozen)).toBeCloseTo(0.05 * ASPECT * K, 6);
+  });
+
+  it('a one-frame jump of the fist turns it at most the safety limit', () => {
+    const rig = orbitRig();
+    rig.close();
+    rig.arm();
+    rig.p.x = rig.o.x + 0.4; // 0.71 view heights in one frame (≈ 2.5 rad asked)
+    rig.step();
+    expect(noTurn(rig.object)).toBeCloseTo(TUNING.orbit.maxTurnRate * DT, 6);
   });
 });
