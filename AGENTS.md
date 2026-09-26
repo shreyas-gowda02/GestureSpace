@@ -30,6 +30,9 @@ one camera, one MediaPipe tracker, one gesture engine and one renderer.
 13. **Lean file structure.** No placeholder/empty files — create a file only when a phase fills it.
     Group small cohesive pieces in one module (e.g. all gesture detectors in one file, all filter
     presets in one file). Split a file only when it grows large (~400+ lines) or has a distinct owner.
+14. **Keep [INSTRUCTIONS.md](INSTRUCTIONS.md) current.** It is the user's guide to every control.
+    Any change to a gesture, key, button, status message or behaviour the user can notice updates it
+    in the same commit (the experience's section, the status table, "Last updated", the changelog).
 
 ## Stack
 

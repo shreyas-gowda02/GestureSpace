@@ -9,7 +9,8 @@
 > an agreed deviation).
 >
 > **Keep this file current:** at the end of every phase update §2 (status), §3 (next step),
-> §6 (decisions) and §10 (session log) before committing.
+> §6 (decisions) and §10 (session log) before committing. **Also keep
+> [INSTRUCTIONS.md](INSTRUCTIONS.md) current** — the user's guide to every control (§4).
 
 @AGENTS.md
 
@@ -170,6 +171,14 @@ without that.
   whether the code belongs in an existing one.
 - **Explain for testing:** each phase report must include plain-language "how to try it" steps the
   user can follow in their own browser.
+- **INSTRUCTIONS.md = the user guide** (user's request, 2026-09-27: "keep updating them in detail
+  on how to use each feature … so we don't miss out anything"). Every change that adds, removes or
+  alters a control, gesture, key, button, status message or behaviour the user can notice updates
+  INSTRUCTIONS.md **in the same commit**: the experience's section, the status table at the top,
+  the "Last updated" line and the changelog at the bottom. When an experience is built, replace its
+  placeholder entry with a full section (same shape as Voxel Builder / Air Draw). Check every
+  statement against the code (keys in `config/keybindings.ts`, help in `modes/registry.ts`, status
+  texts in the mode, numbers in `config/tuning.ts`).
 - **Commit** at the end of each phase (`phase-N: <summary>`). **Do not push** unless the user asks;
   they push themselves with `git push`.
 - **GitHub account = `shreyas-gowda02`** (repo `github.com/shreyas-gowda02/GestureSpace`). The local
@@ -195,7 +204,8 @@ npm run build
 npx prettier --check .
 ```
 
-Then commit and report **exactly** like this:
+Before committing, update INSTRUCTIONS.md for anything the user can notice (§4). Then commit and
+report **exactly** like this:
 
 ```
 ## Phase N report — <name>
@@ -765,3 +775,9 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   hold + 22 px dead zone (brief accidental ones now turn 0°). Sabotage checks: no hold / dead zone,
   a resting fist blocking building, turning about the origin, the wrong direction, no re-anchor,
   no turn limit each fail a test. **Next:** user's two-hand + fist check (§3 step 7) → Phase 7.
+- **2026-09-27 — Session 2 (cont.). INSTRUCTIONS.md started.** The user asked for a file that
+  explains every control in detail and stays updated as features change. Wrote it from the code
+  (keys, registry help, tool panels, status texts, tuning numbers): getting started, gestures,
+  shortcuts, full Voxel Builder and Air Draw sections, planned controls for the placeholders, Debug
+  panel / recording, troubleshooting, changelog. Made keeping it current a standing rule (§4, §5,
+  AGENTS.md rule 14).
