@@ -91,8 +91,8 @@ view so top and side faces show. The cursor now uses a **steady aim** (D43): the
 the ghost showed it. Tool panel with all controls (D45). 5,000 voxels ≈ 63 FPS worst case on the
 Intel iGPU. **Phase 8 — Air Draw** (built before 6–7, D46): draw
 smooth glowing strokes (Catmull-Rom, extra pen smoothing tuned on the user's pinches), release to
-lift — **now point to draw** (index finger out, D48); 8 neon colours, 3 widths, glow on/off; the
-eraser (X) removes every stroke the pointing fingertip touches, highlighted in red first; each stroke / erase / Clear is one undo step;
+lift — **now point to draw** (index finger out, D48); 8 neon colours, 3 widths, glow on/off;
+**a fist with the other hand turns the fingertip into an eraser** (D49; also the X tool + point); each stroke / erase / Clear is one undo step;
 strokes stay aligned through resizes (D47). 194 tests + 7 E2E passing.
 
 **What does not work yet:** the other five experiences (placeholders — Phase 7 Spatial Panel next after 6),
@@ -126,7 +126,8 @@ scenes (Phase 12), undo for moving the whole structure (Phase 6).
    add a real-hand voxel regression test like `realHands.test.ts`. Earlier pending checks: Phase 4
    placeholders, lag feel (D30), Phase 3 gestures, main-user lock with a second person.
 6. **Phase 8 (Air Draw) is DONE — ask for the user's real-hand check** too. Since D48 you POINT to
-   draw: smooth now? does the pen lift reliably when the finger lowers, and never mid-stroke? A
+   draw: smooth now? does the pen lift reliably when the finger lowers, and never mid-stroke? Left
+   fist eraser (D49): is the fist always recognised (Debug panel / status "Left: grab")? A
    recording of them drawing (Debug → Record) would let us tune pen-up and smoothing on real
    pointing (none of the existing recordings point). Also colours
    / widths / glow, eraser (pinch one stroke; hold and sweep over several), undo / Clear, resize the
@@ -245,6 +246,7 @@ Milestones: **M0** after Phase 3 · **M1** after 5 · **M2** after 7 + 11 · **M
 | D46 | **Phase order changed** (user, 2026-09-26): Phase 8 (Air Draw) is built next, before Phases 6 and 7, which come right after it. Phase 5's real-hand check is still pending — the user said "we will get back to this"; ask for it when they return to the Voxel Builder. Air Draw needs nothing from 6 / 7: it draws on the 2D overlay and uses pinch, the steady aim (D43) and undo history, which all exist                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | User's choice                                                                                                 |
 | D47 | **Air Draw choices** (§15; the pen trigger + source are superseded by D48): strokes stored in view units, widths in video heights, so strokes stay glued to the image through resizes; extra pen One Euro (minCutoff 2, beta 20) picked on the user's 43 real moving pinches: wiggle 1.3 / 8.4 px (median / p95) → 0.8 / 6.1, trailing 4.4 / 11 px; Catmull-Rom → Béziers on the 2D overlay; finished strokes cached offscreen and only the new stroke is added (~1.5 ms; erase / undo / resize repaint all: ~20 ms at 50 glowing strokes, ~90 at 200); glow = additive see-through passes, not shadowBlur (~250 ms repaint at 200 strokes); eraser removes every stroke touched while pinched, as one undo step, shown first with a red halo + dashed line; a quick second pinch takes the first stroke back (§11 rule 2)                                                                                                                      | Spec §15 leaves these open; each is measured or tested                                                        |
 | D48 | **Air Draw: point to draw** (user, 2026-09-26, after trying pinch-to-draw: "not very smooth"; replaces the spec's pinch and D47's steady-aim pen): the pen is the dominant hand's INDEX fingertip while the `point` gesture is active (index out, others curled); lowering the finger or opening the hand lifts it; the eraser works the same way; pinch no longer draws. Stroke points come only from new tracker readings (`hands.inferenceTimestamp` changed), never the predicted in-between positions, which overshoot on turns: on 212 real 1.5 s motion windows the drawn line's distance from the true path fell 3.8 / 22 → 1.7 / 10 px (median / p90). Centripetal Catmull-Rom was no better than uniform (1.65 vs 1.68 px wiggle), so uniform stays. The fingertip dot still moves at 60 Hz                                                                                                                                           | User: pinch drawing was not smooth; wants the fingertip to draw                                               |
+| D49 | **Air Draw: other-hand fist = eraser** (user, 2026-09-26): while the non-dominant hand's `grab` (fist: the four fingertips curled — the thumb may be out) is active, the drawing hand's index fingertip erases every stroke it touches, pointing or not; one fist = one undo step. A fist that drops out ≤ 150 ms (`draw.fistGraceMs`) still counts. Strokes under the fingertip when the fist closes (e.g. the line just finished) are spared until the fingertip leaves them. After a stroke or erase a new line needs a fresh point (finger lowered first), so opening the fist with the finger out never starts a stray line. Eraser reach 0.02 → 0.03 of the video height (wiping). The Eraser tool (X) + pointing stays as the button / key equivalent                                                                                                                                                                                    | User's request: erase with a left fist while the right hand moves                                             |
 
 ---
 
@@ -500,6 +502,7 @@ handleAction`, `onHistoryChange`, `dispose`), `src/modes/registry.ts` (`MODE_MET
   `voxelMath` (`lineCells`, `raycastGrid`, `rayPlanePoint`, `inPlaneDistance`, `LayerDial`, cell
   helpers). Scene names used by tests: `Mode:voxel`, `Voxels:<material>`, `VoxelGhost`.
 - `src/modes/draw/` (Phase 8): `DrawMode` (pen = the index fingertip while `point` is active, D48;
+  the other hand's `grab` = eraser with grace + spared strokes + `penArmed` fresh-point rule, D49;
   points added only when `hands.inferenceTimestamp` changes; pen / eraser strokes hold a capture; `strokeList`; publishes `DrawUiState`; draws in
   `drawOverlay`), `strokes.ts` (`Stroke` immutable with Float32Array view-unit points + bounds;
   `StrokeBuilder` min-step sampling + One Euro + live `tail` / `liveCount()`; `traceCatmullRom`
@@ -700,3 +703,9 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   `step(ms, reading)`; `pointDrawScenario`; sabotage-checked (pen filter off, or predicted frames
   allowed, each fail a test). Fixed stray "undefined" cells in D46 / D47. **Next:** user's
   drawing check (ideally a recording while drawing) → Phase 6.
+- **2026-09-26 — Session 2 (cont.). Air Draw: left-fist eraser (D49).** User asked to erase by
+  making a fist with the left hand while the right hand moves over lines. Built it with three
+  safeguards found while writing the tests: a short fist grace (tracking flicker), sparing the
+  line under the fingertip when the fist closes (else the line just drawn vanished at once), and a
+  fresh-point rule after erasing (else opening the fist with the finger out started a stray line).
+  Each safeguard is sabotage-checked. **Next:** user's drawing + fist check → Phase 6.

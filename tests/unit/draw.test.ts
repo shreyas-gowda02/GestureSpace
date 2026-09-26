@@ -436,3 +436,101 @@ describe('DrawMode (§15, point to draw — D48)', () => {
     expect(mode.strokeList[0]?.maxX).toBeGreaterThan(0.55);
   });
 });
+
+describe('DrawMode: a fist with the other hand is the eraser (D49)', () => {
+  /** Two lines to erase: one across y = 0.3, one across y = 0.6. */
+  function twoLines(): { rig: ModeRig; mode: DrawMode } {
+    const r = drawRig();
+    drawPath(r.rig, line(20, { x: 0.2, y: 0.3 }, { x: 0.5, y: 0.3 }));
+    drawPath(r.rig, line(20, { x: 0.2, y: 0.6 }, { x: 0.5, y: 0.6 }));
+    r.rig.show('left', 0.8, 0.8);
+    return r;
+  }
+
+  it('while the left hand is a fist, the right fingertip wipes lines away — no pointing needed', () => {
+    const { rig, mode } = twoLines();
+    tipAt(rig, { x: 0.1, y: 0.45 });
+    rig.grab('left', true);
+    rig.step();
+    expect(mode.strokeList).toHaveLength(2); // nothing under the fingertip yet
+    for (const p of line(20, { x: 0.35, y: 0.2 }, { x: 0.35, y: 0.7 })) {
+      tipAt(rig, p); // an open right hand, just moving over the lines
+      rig.step();
+    }
+    expect(mode.strokeList).toHaveLength(0);
+    rig.grab('left', false);
+    rig.run(15);
+    expect(rig.mc.history?.undoLabel).toBe('Erase strokes');
+    rig.mc.undo(); // the whole wipe is one step
+    expect(mode.strokeList).toHaveLength(2);
+  });
+
+  it('opening the fist goes back to drawing — after a fresh point, so no stray line starts', () => {
+    const { rig, mode } = twoLines();
+    rig.grab('left', true);
+    rig.point('right', true); // the right finger happens to be out while erasing
+    tipAt(rig, { x: 0.1, y: 0.9 });
+    rig.step();
+    rig.grab('left', false);
+    for (const p of line(10, { x: 0.1, y: 0.9 }, { x: 0.3, y: 0.9 })) {
+      tipAt(rig, p);
+      rig.step();
+    }
+    expect(mode.strokeList).toHaveLength(2); // still pointing from the erase: no new line
+    rig.point('right', false);
+    rig.step();
+    drawPath(rig, line(10, { x: 0.6, y: 0.9 }, { x: 0.8, y: 0.9 })); // a fresh point draws
+    expect(mode.strokeList).toHaveLength(3);
+  });
+
+  it('making the fist mid-line keeps the line; it is not erased just because the fingertip is on it', () => {
+    const { rig, mode } = drawRig();
+    rig.show('left', 0.8, 0.8);
+    tipAt(rig, { x: 0.2, y: 0.4 });
+    rig.step();
+    rig.point('right', true);
+    for (const p of line(15, { x: 0.2, y: 0.4 }, { x: 0.5, y: 0.4 })) {
+      tipAt(rig, p);
+      rig.step();
+    }
+    rig.grab('left', true);
+    rig.step();
+    rig.step();
+    expect(mode.strokeList).toHaveLength(1); // finished and kept, though the fingertip is on it
+    tipAt(rig, { x: 0.5, y: 0.6 }); // off the line…
+    rig.step();
+    tipAt(rig, { x: 0.35, y: 0.4 }); // …and back onto it: now it goes
+    rig.step();
+    expect(mode.strokeList).toHaveLength(0);
+  });
+
+  it('a fist that flickers for a moment (tracking) neither ends the wipe nor starts a line', () => {
+    const { rig, mode } = twoLines();
+    tipAt(rig, { x: 0.1, y: 0.45 });
+    rig.grab('left', true);
+    rig.step();
+    tipAt(rig, { x: 0.35, y: 0.3 });
+    rig.step(); // first line wiped
+    rig.grab('left', false);
+    rig.point('right', true);
+    rig.run(5); // 83 ms without the fist (grace 150 ms), finger out
+    rig.grab('left', true);
+    tipAt(rig, { x: 0.35, y: 0.6 });
+    rig.step(); // second line wiped, same wipe
+    rig.grab('left', false);
+    rig.run(15);
+    expect(mode.strokeList).toHaveLength(0);
+    rig.mc.undo();
+    expect(mode.strokeList).toHaveLength(2); // one undo step for both
+  });
+
+  it('only the other hand’s fist counts: a right fist does not erase', () => {
+    const { rig, mode } = twoLines();
+    tipAt(rig, { x: 0.35, y: 0.3 });
+    rig.grab('right', true);
+    rig.step();
+    tipAt(rig, { x: 0.35, y: 0.6 });
+    rig.step();
+    expect(mode.strokeList).toHaveLength(2);
+  });
+});

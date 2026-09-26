@@ -71,7 +71,12 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
         action: 'Pen down — the fingertip draws',
       },
       { gesture: 'Lower the finger or open your hand', action: 'Pen up' },
-      { gesture: 'Eraser (X) + point', action: 'Remove every stroke the fingertip touches' },
+      {
+        gesture: 'Fist with the other hand',
+        action: 'Eraser — the drawing fingertip wipes lines away',
+      },
+      { gesture: 'Open the fist, then point', action: 'Draw again' },
+      { gesture: 'Eraser tool (X) + point', action: 'Same, without the fist' },
       { gesture: 'Ctrl+Z / C', action: 'Undo a stroke / clear the drawing' },
     ],
   },

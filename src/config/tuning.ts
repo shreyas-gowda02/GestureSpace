@@ -318,8 +318,13 @@ export const TUNING = {
      * 0.8 / 6.1 px, for a line trailing the pen by 4.4 / 11 px (β 10: 5.9 / 15 px, barely smoother).
      */
     oneEuro: { minCutoff: 2, beta: 20, dCutoff: 1 },
-    /** Eraser reach around the pen (≈ 14 px at 720p), plus the stroke's own half-width. */
-    eraserRadius: 0.02,
+    /** Eraser reach around the fingertip (≈ 22 px at 720p), plus the stroke's own half-width. */
+    eraserRadius: 0.03,
+    /**
+     * The other hand's fist = eraser (D49). A fist that drops out for this long (tracking) still
+     * counts, so a flicker neither ends the erase nor lets a stray line start.
+     */
+    fistGraceMs: 150,
     /** The stroke the eraser would remove: a red halo (px wider than the line) + a dashed line. */
     eraseHighlight: { color: '#ff5470', alpha: 0.4, pad: 10, dash: [8, 6] },
     /**

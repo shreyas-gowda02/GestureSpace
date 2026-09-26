@@ -214,6 +214,11 @@ export class ModeRig {
     this.press(this.gestures(side).pinch, down);
   }
 
+  /** All four fingers curled (a fist). */
+  grab(side: HandSide, down: boolean): void {
+    this.press(this.gestures(side).grab, down);
+  }
+
   /** Index finger out, others curled (Air Draw's pen). */
   point(side: HandSide, down: boolean): void {
     this.press(this.gestures(side).point, down);
@@ -242,7 +247,7 @@ export class ModeRig {
     this.mc.update(this.frame);
     for (const side of ['left', 'right'] as const) {
       const g = this.frame.gestures[side];
-      for (const p of g ? [g.pinch, g.point] : []) {
+      for (const p of g ? [g.pinch, g.point, g.grab] : []) {
         p.justStarted = false;
         if (p.justEnded) {
           p.justEnded = false;
