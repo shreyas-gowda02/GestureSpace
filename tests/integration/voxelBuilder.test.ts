@@ -1,15 +1,26 @@
 // Voxel Builder end to end: synthetic hand recordings through the same per-frame steps Core runs —
 // perceptionStep → depth estimators → steady aim cursors (D43) → captures → ModeController — so a
-// pinch in the "video" becomes voxels exactly as it would in the app.
+// pinch in the "video" becomes voxels exactly as it would in the app. The two-hand grab (Phase 6)
+// is also replayed on the user's real crossing recording.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { TUNING } from '@/config/tuning';
+import { parseFixture } from '@/core/input';
+import type { Vec2 } from '@/core/types';
 import type { VoxelMode } from '@/modes/voxel/VoxelMode';
-import { pipelineRig } from '../fixtures/modeHarness';
-import { pinchDragScenario, voxelPullScenario } from '../fixtures/syntheticHands';
+import { pipelineRig, VIEW_H } from '../fixtures/modeHarness';
+import {
+  pinchDragScenario,
+  twoHandStretchScenario,
+  voxelPullScenario,
+} from '../fixtures/syntheticHands';
 
 /** A headless Core running the Voxel Builder. */
 function voxelApp() {
-  const { base, mc, play } = pipelineRig('voxel');
+  const { base, mc, frame, play } = pipelineRig('voxel');
   const mode = mc.activeMode as VoxelMode;
   const cells = (): { x: number; y: number; z: number }[] => {
     const out: { x: number; y: number; z: number }[] = [];
@@ -19,7 +30,17 @@ function voxelApp() {
     return out;
   };
   const root = base.scene.getObjectByName('Mode:voxel');
-  return { mc, mode, root, play, cells };
+  if (!root) throw new Error('no voxel root');
+  const labels: string[] = [];
+  const history = mc.history;
+  if (history) {
+    const push = history.push.bind(history);
+    history.push = (cmd) => {
+      labels.push(cmd.label);
+      push(cmd);
+    };
+  }
+  return { base, mc, frame, mode, root, play, cells, labels };
 }
 
 /** No gaps: every voxel is reachable from the first through touching (26-connected) voxels. */
@@ -94,5 +115,80 @@ describe('Voxel Builder end to end (synthetic hands through the full pipeline)',
     column.sort((a, b) => a.z - b.z).forEach((c, i) => expect(c.z).toBe(i + 1));
     app.mc.undo(); // the whole extrusion is one step
     expect(app.mode.grid.count).toBe(row);
+  });
+});
+
+describe('Voxel Builder: two-hand grab (Phase 6, §12)', () => {
+  it('both hands pinch and spread: no jump when it starts, the structure grows and turns, one undo step', () => {
+    const app = voxelApp();
+    const start = app.root.matrixWorld.clone();
+    let atGrab: THREE.Matrix4 | null = null;
+    let grabs = 0;
+    app.play(twoHandStretchScenario(), () => {
+      const two = app.frame.gestures.twoHand;
+      if (two.justStarted) {
+        grabs++;
+        atGrab = app.root.matrixWorld.clone();
+      }
+    });
+    expect(grabs).toBe(1);
+    expect(atGrab && start.equals(atGrab)).toBe(true); // no jump on engage
+    expect(app.root.scale.x).toBeGreaterThan(1.5);
+    expect(app.mode.grid.count).toBe(0); // the first hand's pinch left no stray voxel
+    expect(app.labels).toEqual(['Move structure']);
+    app.mc.undo();
+    expect(app.root.matrixWorld.equals(start)).toBe(true);
+  });
+
+  it('your real crossing recording: every grab is one undo step, no half-turn flip, no lag', () => {
+    const fixture = parseFixture(
+      JSON.parse(
+        readFileSync(resolve(__dirname, '../fixtures/landmarks/real/both-crossing.json'), 'utf8'),
+      ),
+    );
+    const app = voxelApp();
+    const start = app.root.matrixWorld.clone();
+    const T = TUNING.twoHand;
+    const dt = 1 / 60;
+    const scr: Vec2 = { x: 0, y: 0 };
+    let prev: { x: number; y: number; q: THREE.Quaternion; s: number } | null = null;
+    let worst = { px: 0, turn: 0, size: 0 };
+    const grabs: { at: number; q0: THREE.Quaternion; turn: number }[] = [];
+    app.play(fixture, (t) => {
+      const two = app.frame.gestures.twoHand;
+      const root = app.root;
+      if (two.justStarted) {
+        grabs.push({ at: t, q0: root.quaternion.clone(), turn: 0 });
+      }
+      const g = grabs.at(-1);
+      if (!two.active || !g) {
+        prev = null;
+        return;
+      }
+      g.turn = (root.quaternion.angleTo(g.q0) * 180) / Math.PI;
+      app.base.coords.worldToScreen(root.position, scr);
+      if (prev) {
+        worst = {
+          px: Math.max(worst.px, Math.hypot(scr.x - prev.x, scr.y - prev.y)),
+          turn: Math.max(worst.turn, root.quaternion.angleTo(prev.q)),
+          size: Math.max(worst.size, Math.abs(Math.log(root.scale.x / prev.s))),
+        };
+      }
+      prev = { x: scr.x, y: scr.y, q: root.quaternion.clone(), s: root.scale.x };
+    });
+    expect(grabs).toHaveLength(9);
+    expect(app.labels.filter((l) => l === 'Move structure')).toHaveLength(9);
+    // 36.6 s: the hands cross while pinching — the hand line turns 161° (the old in-mode transform
+    // spun the structure that far); now it barely turns.
+    const crossed = grabs.find((g) => Math.abs(g.at - 36_550) < 200);
+    expect(crossed?.turn).toBeLessThan(5);
+    // The safety limits never held back a real grab (else the structure would trail the hands).
+    expect(worst.px).toBeLessThan(T.maxMoveRate * dt * VIEW_H * 0.9);
+    expect(worst.turn).toBeLessThan(T.maxTurnRate * dt * 0.9);
+    expect(worst.size).toBeLessThan(T.maxScaleRate * dt * 0.9);
+    // Undo everything (voxels and moves, interleaved): back exactly where it started.
+    while (app.mc.undo());
+    expect(app.mode.grid.count).toBe(0);
+    expect(app.root.matrixWorld.equals(start)).toBe(true);
   });
 });

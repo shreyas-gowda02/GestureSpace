@@ -570,24 +570,39 @@ describe('VoxelMode: two hands, tools, lifecycle', () => {
     expect(mode.grid.count).toBe(1);
     rig.pinch('left', true);
     const two = rig.frame.gestures.twoHand;
-    Object.assign(two, { active: true, justStarted: true, cancelFirstHand: 'right', scale: 1 });
+    Object.assign(two, {
+      active: true,
+      justStarted: true,
+      cancelFirstHand: 'right',
+      distance: 0.4,
+    });
     two.center = { x: 0.5, y: 0.5 };
     rig.step();
     expect(mode.grid.count).toBe(0);
     expect(rig.mc.history?.canUndo).toBe(false);
     expect(rig.base.capture.get('twoHand')?.targetId).toBe('voxel-root');
     const before = root.position.clone();
+    const tilt = root.quaternion.clone();
     two.center.x = 0.6;
-    two.scale = 1.5;
+    two.distance = 0.6;
     two.rotation = 0.3;
-    rig.step();
+    rig.run(30);
     expect(root.scale.x).toBeCloseTo(1.5);
     expect(root.position.x).toBeGreaterThan(before.x + 1);
     two.active = false;
     rig.step();
     expect(rig.base.capture.count).toBe(0);
+    // The move is one undo step (Phase 6), and so is Reset view.
+    expect(rig.mc.history?.undoLabel).toBe('Move structure');
     rig.mc.resetView();
     expect(root.position.length()).toBe(0);
+    expect(root.scale.x).toBe(1);
+    expect(rig.mc.history?.undoLabel).toBe('Reset view');
+    rig.mc.undo();
+    expect(root.scale.x).toBeCloseTo(1.5);
+    rig.mc.undo();
+    expect(root.position.distanceTo(before)).toBeLessThan(1e-9);
+    expect(root.quaternion.angleTo(tilt)).toBeLessThan(1e-6);
     expect(root.scale.x).toBe(1);
   });
 

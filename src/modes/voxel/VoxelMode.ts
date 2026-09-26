@@ -5,7 +5,8 @@
 //  • Depth changes only on purpose (Depth Lock, on by default): non-dominant pinch + up/down,
 //    Q / E, ±Z buttons. Unlocked (experimental), the dominant hand's depth picks the layer.
 //  • Build / Erase / Paint, 8 colours, solid / glass / glow; two-hand pinch moves, turns and scales
-//    the whole structure — the grid stays in local integer cells, so alignment is always exact.
+//    the whole structure (TwoHandTransform, one undo step) — the grid stays in local integer cells,
+//    so alignment is always exact.
 
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
@@ -14,7 +15,6 @@ import type {
   HandSide,
   InteractionFrame,
   SceneCursor,
-  TwoHandState,
   Vec2,
   Vec3,
   VoxelMaterial,
@@ -23,9 +23,16 @@ import type {
 } from '@/core/types';
 import { singleHandPinchAllowed } from '@/gestures/GestureEngine';
 import { pinchPointInto } from '@/gestures/twoHand';
-import { InteractionPlane } from '@/spatial/CoordinateMapper';
 import { StepQuantizer } from '@/spatial/DepthEstimator';
 import { clamp } from '@/utils/math';
+import {
+  applyPose,
+  makePose,
+  readPose,
+  samePose,
+  transformCommand,
+  TwoHandTransform,
+} from '../shared/TwoHandTransform';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import { clearCommand, VoxelEdit, VoxelGrid, type VoxelValue } from './VoxelGrid';
 import { VoxelRenderer } from './VoxelRenderer';
@@ -51,7 +58,6 @@ const V = TUNING.voxel;
 const STROKE_ID = 'voxel-stroke';
 const DIAL_ID = 'voxel-layer-dial';
 const ROOT_ID = 'voxel-root';
-const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 const LABEL: Record<VoxelTool, string> = {
   build: 'Add voxels',
@@ -68,6 +74,9 @@ const STROKE_TEXT: Record<VoxelTool, string> = {
   erase: 'Erasing — release to finish',
   paint: 'Painting — release to finish',
 };
+
+const VIEW_POSE = makePose();
+VIEW_POSE.quaternion.setFromEuler(new THREE.Euler(V.defaultView.tiltX, V.defaultView.turnY, 0));
 
 const other = (s: HandSide): HandSide => (s === 'right' ? 'left' : 'right');
 const hexString = (n: number): string => `#${n.toString(16).padStart(6, '0')}`;
@@ -116,14 +125,8 @@ export class VoxelMode implements SpatialMode {
   private stroke: Stroke | null = null;
   private dial: { side: HandSide; baseLayer: number } | null = null;
   private readonly dialer = new LayerDial(V.LAYER_STEP_DISTANCE);
-  private twoHand = false;
-  private readonly twoBase = {
-    position: new THREE.Vector3(),
-    quaternion: new THREE.Quaternion(),
-    scale: 1,
-    center: new THREE.Vector3(),
-  };
-  private readonly twoPlane = new InteractionPlane();
+  /** Two-hand pinch: moves / turns / scales the whole structure (voxelRoot). */
+  private transform: TwoHandTransform | null = null;
   /** Depth Lock off: dominant-hand depth → layer, relative to where it was when last rebased. */
   private unlockBase = NaN;
   private unlockLayer = 0;
@@ -149,10 +152,8 @@ export class VoxelMode implements SpatialMode {
   private readonly c = vec3();
   private readonly cell = vec3();
   private readonly dir = vec3();
-  private readonly ndc: Vec2 = { x: 0, y: 0 };
   private readonly pinchPoint: Vec2 = { x: 0, y: 0 };
   private readonly v3 = new THREE.Vector3();
-  private readonly q = new THREE.Quaternion();
 
   private readonly occupied = (x: number, y: number, z: number): boolean => this.grid.has(x, y, z);
   private readonly paintCell: CellVisitor = (x, y, z) => {
@@ -174,8 +175,8 @@ export class VoxelMode implements SpatialMode {
     if (!ctx || !renderer) return;
     this.now = frame.timestamp;
 
-    this.updateTwoHand(frame.gestures.twoHand);
-    const allowed = singleHandPinchAllowed(frame.gestures) && !this.twoHand;
+    this.updateTwoHand(frame);
+    const allowed = singleHandPinchAllowed(frame.gestures) && !this.moving;
 
     // The building hand (dominant, or whichever hand holds the stroke).
     const side = this.stroke?.side ?? frame.dominant;
@@ -246,21 +247,26 @@ export class VoxelMode implements SpatialMode {
     ctx.history.execute(clearCommand(grid));
   }
 
-  /** Reset view (R): the structure back to its resting position, size and 3/4 angle. */
+  /**
+   * Reset view (R): the structure back to its resting position, size and 3/4 angle — one undo step,
+   * so Ctrl+Z brings the view you had back (a grab in progress is kept as its own step first).
+   */
   resetView(): void {
-    if (this.twoHand) this.ctx?.capture.release('twoHand', 'cancelled');
-    const root = this.root;
+    const { ctx, root } = this;
     if (!root) return;
-    root.position.set(0, 0, 0);
-    root.quaternion.setFromEuler(new THREE.Euler(V.defaultView.tiltX, V.defaultView.turnY, 0));
-    root.scale.setScalar(1);
-    root.updateMatrixWorld();
+    this.transform?.cancel();
+    const before = readPose(root, makePose());
+    this.defaultView(root);
+    const after = readPose(root, makePose());
+    if (ctx && !samePose(before, after)) {
+      ctx.history.push(transformCommand(root, before, after, 'Reset view'));
+    }
   }
 
   exit(): void {
     this.endStroke(true);
     this.dial = null;
-    this.twoHand = false;
+    this.transform?.cancel();
     this.renderer?.ghost.hide();
     if (this.root) this.root.visible = false;
   }
@@ -489,7 +495,7 @@ export class VoxelMode implements SpatialMode {
   /** Depth Lock off (experimental, §13.5): the dominant hand's depth estimate picks the layer. */
   private updateUnlockedDepth(frame: InteractionFrame): void {
     const g = frame.gestures[frame.dominant];
-    const busy = this.stroke || this.dial || this.twoHand;
+    const busy = this.stroke || this.dial || this.moving;
     if (this.depthLock || busy || !g || !frame.hands[frame.dominant]) {
       this.unlockBase = NaN;
       return;
@@ -507,11 +513,15 @@ export class VoxelMode implements SpatialMode {
 
   // --- two-hand transform (moves / turns / scales the whole structure) -------------------------
 
-  private updateTwoHand(two: TwoHandState): void {
-    const ctx = this.ctx;
-    const root = this.root;
-    if (!ctx || !root) return;
-    if (two.justStarted) {
+  private get moving(): boolean {
+    return this.transform?.active ?? false;
+  }
+
+  private updateTwoHand(frame: InteractionFrame): void {
+    const { ctx, transform } = this;
+    if (!ctx || !transform) return;
+    const two = frame.gestures.twoHand;
+    if (two.justStarted && !transform.active) {
       // Precedence (§11 rule 2): a quick second pinch means the first hand's action was really the
       // start of this grab — undo it; otherwise keep what it did.
       const first = two.cancelFirstHand;
@@ -520,49 +530,9 @@ export class VoxelMode implements SpatialMode {
         if (this.dial.side === first) this.setLayer(this.dial.baseLayer);
         ctx.capture.release(this.dial.side, 'cancelled');
       }
-      if (ctx.capture.capture('twoHand', ROOT_ID, this.now, () => (this.twoHand = false))) {
-        const b = this.twoBase;
-        b.position.copy(root.position);
-        b.quaternion.copy(root.quaternion);
-        b.scale = root.scale.x;
-        this.twoPlane.setThrough(root.position, ctx.camera);
-        if (!this.handsCenter(two, b.center)) b.center.copy(root.position);
-        this.twoHand = true;
-      }
+      transform.begin(ctx, two, this.now);
     }
-    if (!this.twoHand) return;
-    if (!two.active) {
-      ctx.capture.release('twoHand', 'released');
-      return;
-    }
-    // Scale and turn about the hands' midpoint, and follow it (§12, relative to the baseline).
-    const center = this.v3;
-    if (!this.handsCenter(two, center)) return;
-    const b = this.twoBase;
-    const T = TUNING.twoHand;
-    const scale = clamp(
-      b.scale * clamp(two.scale, T.minScale, T.maxScale),
-      V.rootScale.min,
-      V.rootScale.max,
-    );
-    // View y points down, scene y up: a clockwise hand line is a negative turn about +Z.
-    this.q.setFromAxisAngle(Z_AXIS, -two.rotation * T.ROTATION_SENSITIVITY);
-    root.quaternion.copy(this.q).multiply(b.quaternion);
-    root.position
-      .copy(b.position)
-      .sub(b.center)
-      .multiplyScalar(scale / b.scale)
-      .applyQuaternion(this.q)
-      .add(center);
-    root.scale.setScalar(scale);
-    root.updateMatrixWorld();
-  }
-
-  private handsCenter(two: TwoHandState, out: THREE.Vector3): boolean {
-    const ctx = this.ctx;
-    if (!ctx) return false;
-    ctx.coords.viewToNdc(two.center, this.ndc);
-    return ctx.coords.ndcToPlane(this.ndc, this.twoPlane.plane, out);
+    transform.update(frame);
   }
 
   // --- feedback --------------------------------------------------------------------------------
@@ -578,7 +548,7 @@ export class VoxelMode implements SpatialMode {
       ghost.show(offsetCell(s.anchor, this.dir, 1, this.cell), this.dir, s.extrude, color);
     } else if (
       !s &&
-      !this.twoHand &&
+      !this.moving &&
       !this.dial &&
       this.hasAim &&
       this.target(this.tool, this.cell)
@@ -595,7 +565,8 @@ export class VoxelMode implements SpatialMode {
     const s = this.stroke;
     const layer = layerLabel(this.layer);
     let text: string;
-    if (this.twoHand) text = 'Moving the structure — let go of both pinches to drop it';
+    if (this.transform?.frozen) text = 'Hand lost — the structure holds still until it is back';
+    else if (this.moving) text = 'Moving the structure — let go of both pinches to drop it';
     else if (s?.kind === 'extrude') text = `Extruding ${s.extrude} — push / pull, release to place`;
     else if (s) text = STROKE_TEXT[s.tool];
     else if (this.dial) text = `Depth layer ${layer} — move your ${this.dial.side} hand up / down`;
@@ -632,7 +603,17 @@ export class VoxelMode implements SpatialMode {
     this.renderer.buildPlane.setLayer(this.layer, -Infinity);
     ctx.scene.add(root);
     this.root = root;
+    this.transform = new TwoHandTransform(root, {
+      id: ROOT_ID,
+      label: 'Move structure',
+      scaleRange: V.rootScale,
+    });
     this.depthLock = ctx.settings.depthLockDefault;
-    this.resetView();
+    this.defaultView(root);
+  }
+
+  /** Resting position, size and the gentle 3/4 angle that shows top and side faces (D44). */
+  private defaultView(root: THREE.Group): void {
+    applyPose(root, VIEW_POSE);
   }
 }

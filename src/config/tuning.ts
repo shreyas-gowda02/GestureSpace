@@ -169,13 +169,32 @@ export const TUNING = {
     TWO_HAND_JOIN_MS: 150,
   },
 
+  /** Two-hand transform (§12, `modes/shared/TwoHandTransform.ts`). Distances in view heights. */
   twoHand: {
+    /** Limits on one grab's size change (× the size at the grab). */
     minScale: 0.2,
     maxScale: 5.0,
     ROTATION_SENSITIVITY: 1.0,
-    /** Clamp on per-frame deltas to prevent explosions. */
-    maxScaleStepPerFrame: 0.25,
-    maxRotationStepPerFrame: 0.35,
+    /**
+     * Hands closer than this don't scale: a few px of tracking noise between nearly touching hands
+     * is a big ratio (the user's crossing recording: a grab begun 0.05 apart read 10.6×).
+     */
+    minSpan: 0.15,
+    /**
+     * Turning fades out as the hands come together (their angle is noise): none → full. Hands that
+     * pass each other flip the hand line 180°; this keeps the object to ~11° (0.02 apart vertically).
+     */
+    turnFade: { none: 0.08, full: 0.25 },
+    /**
+     * Safety limits, per second (modes run every display frame, 60–144 Hz): how fast the object may
+     * follow the hands, so a one-frame tracking glitch is a small blip. Kept above the fastest real
+     * grab in the user's crossing recording (move 2.9 view heights/s, size 13 ln/s, turn 10 rad/s).
+     */
+    maxMoveRate: 5,
+    /** ln(scale) per second. */
+    maxScaleRate: 15,
+    /** Radians per second. */
+    maxTurnRate: 12,
   },
 
   depth: {
