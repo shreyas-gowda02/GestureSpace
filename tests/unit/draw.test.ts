@@ -256,37 +256,37 @@ function drawRig(): { rig: ModeRig; mode: DrawMode } {
   return { rig, mode: rig.mc.activeMode as DrawMode };
 }
 
-/** Aim the hand's cursor at a view-normalized point. */
-function aimView(rig: ModeRig, p: Vec2, side: HandSide = 'right'): void {
-  rig.aim(side, rig.base.coords.viewToNdc(p, { x: 0, y: 0 }));
+/** Put the hand's index fingertip at a view-normalized point. */
+function tipAt(rig: ModeRig, p: Vec2, side: HandSide = 'right'): void {
+  rig.show(side, p.x, p.y);
 }
 
-/** Pinch at the first point, move through the rest (one frame each), release. */
+/** Point at the first point, move the fingertip through the rest (one frame each), lower it. */
 function drawPath(rig: ModeRig, path: readonly Vec2[], side: HandSide = 'right'): void {
   const [first, ...rest] = path;
   if (!first) return;
-  aimView(rig, first, side);
+  tipAt(rig, first, side);
   rig.step();
-  rig.pinch(side, true);
+  rig.point(side, true);
   rig.step();
   for (const p of rest) {
-    aimView(rig, p, side);
+    tipAt(rig, p, side);
     rig.step();
   }
-  rig.pinch(side, false);
+  rig.point(side, false);
   rig.step();
 }
 
 const lastUi = (rig: ModeRig): DrawUiState | undefined => rig.ui.filter((u) => u.draw).at(-1)?.draw;
 
-describe('DrawMode (§15)', () => {
-  it('pinch = pen down, move = draw, release = pen up: one stroke, one undo step', () => {
+describe('DrawMode (§15, point to draw — D48)', () => {
+  it('point = pen down at the index fingertip, move = draw, lower = pen up: one stroke, one undo step', () => {
     const { rig, mode } = drawRig();
     drawPath(rig, line(40, { x: 0.3, y: 0.4 }, { x: 0.6, y: 0.5 }));
     const s = mode.strokeList[0];
     expect(mode.strokeList).toHaveLength(1);
     expect(s?.count).toBeGreaterThan(10);
-    expect(s?.points[0]).toBeCloseTo(0.3, 3); // stored in view units, where the pen was
+    expect(s?.points[0]).toBeCloseTo(0.3, 3); // view units, exactly where the fingertip was
     expect(s?.points[1]).toBeCloseTo(0.4, 3);
     expect(s?.color).toBe(D.palette[0].hex);
     expect(rig.mc.history?.undoLabel).toBe('Draw stroke');
@@ -297,14 +297,49 @@ describe('DrawMode (§15)', () => {
     expect(lastUi(rig)?.count).toBe(1);
   });
 
-  it('the eraser removes the stroke you pinch; hold + sweep removes every stroke touched, as one step', () => {
+  it('pinching no longer draws', () => {
+    const { rig, mode } = drawRig();
+    tipAt(rig, { x: 0.3, y: 0.3 });
+    rig.step();
+    rig.pinch('right', true);
+    for (const p of line(20, { x: 0.3, y: 0.3 }, { x: 0.6, y: 0.3 })) {
+      tipAt(rig, p);
+      rig.step();
+    }
+    rig.pinch('right', false);
+    rig.step();
+    expect(mode.strokeList).toHaveLength(0);
+  });
+
+  it('only real tracker readings go into the stroke, never the predicted in-between positions', () => {
+    const { rig, mode } = drawRig();
+    tipAt(rig, { x: 0.3, y: 0.5 });
+    rig.step();
+    rig.point('right', true);
+    rig.step();
+    for (const p of line(20, { x: 0.3, y: 0.5 }, { x: 0.6, y: 0.5 })) {
+      tipAt(rig, { x: p.x + 0.01, y: 0.56 }); // a prediction overshooting a turn…
+      rig.step(1000 / 60, false);
+      tipAt(rig, p); // …then the real reading
+      rig.step();
+    }
+    rig.point('right', false);
+    rig.step();
+    const s = mode.strokeList[0];
+    let worst = 0;
+    for (let i = 0; i < (s?.count ?? 0); i++)
+      worst = Math.max(worst, Math.abs((s?.points[i * 2 + 1] ?? 0) - 0.5));
+    expect(worst).toBeLessThan(0.001);
+  });
+
+  it('the eraser removes the stroke you point at; keep pointing and sweep to remove more, as one step', () => {
     const { rig, mode } = drawRig();
     drawPath(rig, line(20, { x: 0.2, y: 0.3 }, { x: 0.4, y: 0.3 }));
     drawPath(rig, line(20, { x: 0.2, y: 0.6 }, { x: 0.4, y: 0.6 }));
     drawPath(rig, line(20, { x: 0.7, y: 0.3 }, { x: 0.9, y: 0.3 }));
     rig.mc.handleAction({ type: 'toggleErase' });
     expect(lastUi(rig)?.tool).toBe('eraser');
-    drawPath(rig, [{ x: 0.3, y: 0.3 }]); // pinch on the first stroke
+    drawPath(rig, [{ x: 0.3, y: 0.3 }]); // point at the first stroke
     expect(mode.strokeList.map((s) => s.id)).toEqual([2, 3]);
     drawPath(
       rig,
@@ -346,48 +381,33 @@ describe('DrawMode (§15)', () => {
     expect(mode.strokeList).toHaveLength(2);
   });
 
-  it('a quick second pinch (two-hand gesture) takes the first hand’s stroke back; a late one keeps it', () => {
-    for (const [cancel, kept] of [
-      ['right', 0],
-      [null, 1],
-    ] as const) {
-      const { rig, mode } = drawRig();
-      rig.show('left', 0.2, 0.5);
-      aimView(rig, { x: 0.5, y: 0.5 });
-      rig.step();
-      rig.pinch('right', true);
-      rig.step();
-      aimView(rig, { x: 0.55, y: 0.5 });
-      rig.step();
-      rig.pinch('left', true);
-      Object.assign(rig.frame.gestures.twoHand, {
-        active: true,
-        justStarted: true,
-        cancelFirstHand: cancel,
-      });
-      rig.step();
-      aimView(rig, { x: 0.65, y: 0.5 });
-      rig.step(); // both hands pinching: nothing is drawn
-      expect(mode.strokeList).toHaveLength(kept);
-      expect(rig.base.capture.count).toBe(0);
-    }
+  it('no stroke starts while both hands pinch (a two-hand gesture)', () => {
+    const { rig, mode } = drawRig();
+    tipAt(rig, { x: 0.5, y: 0.5 });
+    rig.frame.gestures.twoHand.active = true;
+    rig.point('right', true);
+    rig.step();
+    tipAt(rig, { x: 0.6, y: 0.5 });
+    rig.step();
+    expect(mode.strokeList).toHaveLength(0);
+    expect(rig.base.capture.count).toBe(0);
   });
 
   it('a lost hand or a mode switch lifts the pen and keeps the stroke', () => {
     const { rig, mode } = drawRig();
-    aimView(rig, { x: 0.3, y: 0.3 });
+    tipAt(rig, { x: 0.3, y: 0.3 });
     rig.step();
-    rig.pinch('right', true);
+    rig.point('right', true);
     rig.step();
-    aimView(rig, { x: 0.4, y: 0.3 });
+    tipAt(rig, { x: 0.4, y: 0.3 });
     rig.step();
     rig.base.capture.release('right', 'lost'); // what Core does when the hand disappears
     expect(mode.strokeList).toHaveLength(1);
-    rig.pinch('right', false);
+    rig.point('right', false);
     rig.step();
-    aimView(rig, { x: 0.3, y: 0.6 });
+    tipAt(rig, { x: 0.3, y: 0.6 });
     rig.step();
-    rig.pinch('right', true);
+    rig.point('right', true);
     rig.step();
     rig.mc.switchTo('voxel');
     expect(mode.strokeList).toHaveLength(2);
@@ -396,9 +416,9 @@ describe('DrawMode (§15)', () => {
 
   it('left/right renamed mid-stroke (D42): the same stroke continues with the renamed hand', () => {
     const { rig, mode } = drawRig();
-    aimView(rig, { x: 0.3, y: 0.3 });
+    tipAt(rig, { x: 0.3, y: 0.3 });
     rig.step();
-    rig.pinch('right', true);
+    rig.point('right', true);
     rig.step();
     rig.base.capture.swapSides();
     rig.mc.swapSides();
@@ -407,10 +427,10 @@ describe('DrawMode (§15)', () => {
     rig.frame.hands.left = rig.frame.hands.right;
     rig.hide('right');
     for (const p of line(20, { x: 0.3, y: 0.3 }, { x: 0.6, y: 0.3 })) {
-      aimView(rig, p, 'left');
+      tipAt(rig, p, 'left');
       rig.step();
     }
-    rig.pinch('left', false);
+    rig.point('left', false);
     rig.step();
     expect(mode.strokeList).toHaveLength(1);
     expect(mode.strokeList[0]?.maxX).toBeGreaterThan(0.55);

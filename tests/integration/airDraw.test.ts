@@ -1,11 +1,12 @@
 // Air Draw end to end: synthetic hand recordings through Core's per-frame steps (pipelineRig), so
-// a pinch "in the video" becomes a stroke exactly as it would in the app.
+// pointing "in the video" becomes a stroke exactly as it would in the app.
 
 import { describe, expect, it } from 'vitest';
 import type { Vec2 } from '@/core/types';
 import type { DrawMode } from '@/modes/draw/DrawMode';
 import { pipelineRig } from '../fixtures/modeHarness';
-import { pinchDragScenario } from '../fixtures/syntheticHands';
+import { INDEX_TIP } from '@/vision/landmarks';
+import { pointDrawScenario } from '../fixtures/syntheticHands';
 
 const W = 1280;
 const H = 720;
@@ -46,33 +47,26 @@ function wiggle(pts: readonly Vec2[]): number {
 function drawApp() {
   const app = pipelineRig('draw');
   const mode = app.mc.activeMode as DrawMode;
-  /** The raw pen (cursor) positions while the pinch is held, and when the pinch began. */
+  /** The fingertip (60 Hz, incl. predicted frames) while pointing, and where the pen went down. */
   const raw: Vec2[] = [];
-  const seen: { t: number; p: Vec2 }[] = [];
-  let pinchAt = -1;
-  const visit = (t: number): void => {
-    const c = app.base.cursors.cursors.right;
-    if (!c) return;
-    const s = app.base.coords.ndcToScreen(c.ndc, { x: 0, y: 0 });
-    const p = app.base.viewport.screenToView(s, { x: 0, y: 0 });
-    seen.push({ t, p });
-    const pinch = app.frame.gestures.right?.pinch;
-    if (pinch?.phase === 'active') {
-      if (pinchAt < 0) pinchAt = t;
-      raw.push(p);
-    }
+  let down: Vec2 | null = null;
+  const visit = (): void => {
+    const tip = app.frame.hands.right?.landmarks[INDEX_TIP];
+    if (!tip || app.frame.gestures.right?.point.phase !== 'active') return;
+    down ??= { x: tip.x, y: tip.y };
+    raw.push({ x: tip.x, y: tip.y });
   };
-  return { ...app, mode, raw, seen, visit, pinchAt: () => pinchAt };
+  return { ...app, mode, raw, visit, down: () => down };
 }
 
 describe('Air Draw end to end (synthetic hands through the full pipeline)', () => {
-  it('pinch, hold, drag, release = one stroke that starts where the cursor was', () => {
+  it('point, hold, trace, open the hand = one stroke that starts at the fingertip', () => {
     const app = drawApp();
-    app.play(pinchDragScenario(), app.visit);
+    app.play(pointDrawScenario(), app.visit);
     expect(app.mode.strokeList).toHaveLength(1);
     const s = app.mode.strokeList[0];
     if (!s) return;
-    // Holding still adds (almost) nothing; the drag adds the rest.
+    // Holding still adds (almost) nothing; the tracing adds the rest.
     const holdPoints = [];
     for (let i = 0; i < s.count; i++) {
       const d = Math.hypot(
@@ -83,18 +77,17 @@ describe('Air Draw end to end (synthetic hands through the full pipeline)', () =
     }
     expect(holdPoints.length).toBeLessThanOrEqual(2);
     expect(s.count).toBeGreaterThan(20);
-    // The stroke begins where the cursor was shown ~150 ms before the pinch registered (D43).
-    const before = app.seen.filter((x) => x.t <= app.pinchAt() - 150).at(-1)?.p;
-    const px = before
-      ? Math.hypot(((s.points[0] ?? 0) - before.x) * W, ((s.points[1] ?? 0) - before.y) * H)
+    const down = app.down();
+    const px = down
+      ? Math.hypot(((s.points[0] ?? 0) - down.x) * W, ((s.points[1] ?? 0) - down.y) * H)
       : Infinity;
-    expect(px).toBeLessThan(12);
+    expect(px).toBeLessThan(3); // exactly where the pointing fingertip was
     expect(app.mc.history?.undoLabel).toBe('Draw stroke');
   });
 
-  it('with shaky landmarks the stroke is straighter than the raw pen path', () => {
+  it('with shaky landmarks the stroke is calmer than the fingertip path', () => {
     const app = drawApp();
-    app.play(pinchDragScenario(0.003, 9), app.visit);
+    app.play(pointDrawScenario(0.003, 9), app.visit);
     const s = app.mode.strokeList[0];
     expect(s).toBeDefined();
     if (!s) return;
@@ -103,8 +96,18 @@ describe('Air Draw end to end (synthetic hands through the full pipeline)', () =
       drawn.push({ x: s.points[i * 2] ?? 0, y: s.points[i * 2 + 1] ?? 0 });
     const rawShake = wiggle(app.raw);
     const drawnShake = wiggle(drawn);
-    expect(rawShake).toBeGreaterThan(0.5); // the input really is shaky…
-    // Measured 1.78 → 0.34 px; without the pen filter (point spacing alone) 0.67 px.
-    expect(drawnShake).toBeLessThan(rawShake * 0.3); // …and the line is visibly calmer
+    // The traced wave curves on its own, so compare against the same hand without jitter.
+    const clean = drawApp();
+    clean.play(pointDrawScenario(0, 9), clean.visit);
+    const c = clean.mode.strokeList[0];
+    const cleanPts: Vec2[] = [];
+    for (let i = 0; i < (c?.count ?? 0); i++) {
+      cleanPts.push({ x: c?.points[i * 2] ?? 0, y: c?.points[i * 2 + 1] ?? 0 });
+    }
+    const addedToTip = rawShake - wiggle(clean.raw);
+    const addedToStroke = drawnShake - wiggle(cleanPts);
+    expect(addedToTip).toBeGreaterThan(0.5); // the jitter really shakes the fingertip…
+    // …and most of it never reaches the line. Measured 0.79 → 0.18 px.
+    expect(addedToStroke).toBeLessThan(addedToTip * 0.35);
   });
 });

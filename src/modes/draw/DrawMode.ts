@@ -1,7 +1,7 @@
-// Experience 3 — Air Draw (§15): pinch with the dominant hand to put the pen down, move to draw
-// glowing strokes, release to lift it. 8 neon colours, 3 widths, glow on / off; the eraser removes
-// whole strokes you touch; every stroke, erase and Clear is one undo step. The pen is the steady
-// aim (D43), so a stroke starts where the cursor was, not where the pinching finger slid to.
+// Experience 3 — Air Draw (§15): point with the dominant hand's index finger (others curled) and
+// the fingertip draws glowing strokes; lower the finger or open the hand to lift the pen (D48 — the
+// user's choice over the spec's pinch). 8 neon colours, 3 widths, glow on / off; the eraser removes
+// whole strokes the pointing fingertip touches; every stroke, erase and Clear is one undo step.
 
 import { TUNING } from '@/config/tuning';
 import type {
@@ -13,6 +13,7 @@ import type {
   Vec2,
 } from '@/core/types';
 import { singleHandPinchAllowed } from '@/gestures/GestureEngine';
+import { INDEX_TIP } from '@/vision/landmarks';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import {
   StrokeBuilder,
@@ -46,10 +47,12 @@ export class DrawMode implements SpatialMode {
   private pen: { side: HandSide; look: StrokeLook } | null = null;
   private eraser: { side: HandSide; before: readonly Stroke[] } | null = null;
   private hover: Stroke | null = null;
-  private hasAim = false;
-  /** The pen position this frame, view-normalized. */
-  private readonly aim: Vec2 = { x: 0, y: 0 };
-  private readonly screen: Vec2 = { x: 0, y: 0 };
+  private hasTip = false;
+  /** The pen: the drawing hand's index fingertip this frame, view-normalized. */
+  private readonly tip: Vec2 = { x: 0, y: 0 };
+  /** A new tracker reading arrived this frame (not just a predicted in-between position). */
+  private newReading = false;
+  private lastReading = -1;
   private readonly renderer = new StrokeRenderer();
 
   private now = 0;
@@ -77,26 +80,22 @@ export class DrawMode implements SpatialMode {
     if (!this.ctx) return;
     this.now = frame.timestamp;
 
-    const two = frame.gestures.twoHand;
-    if (two.justStarted) {
-      // Precedence (§11 rule 2): a second pinch right after the first means a two-hand gesture,
-      // so the first hand's just-started stroke is taken back; a later one is kept.
-      const first = two.cancelFirstHand;
-      if (this.pen) this.endPen(this.pen.side !== first);
-      if (this.eraser) this.endEraser(this.eraser.side !== first);
-    }
+    // Precedence (§11 rule 2): no new stroke starts while both hands pinch (a two-hand gesture).
     const allowed = singleHandPinchAllowed(frame.gestures);
+    const reading = frame.hands.inferenceTimestamp;
+    this.newReading = reading !== this.lastReading;
+    this.lastReading = reading;
 
     const side = this.pen?.side ?? this.eraser?.side ?? frame.dominant;
-    this.readAim(frame, side);
+    this.readTip(frame, side);
     const g = frame.gestures[side];
     if (this.pen) this.continuePen(g);
     else if (this.eraser) this.continueEraser(g);
-    else if (allowed && this.hasAim && g?.pinch.justStarted) this.start(side);
+    else if (allowed && this.hasTip && g?.point.justStarted) this.start(side);
 
     this.hover =
-      this.tool === 'eraser' && !this.eraser && allowed && this.hasAim
-        ? this.strokeAt(this.aim)
+      this.tool === 'eraser' && !this.eraser && allowed && this.hasTip
+        ? this.strokeAt(this.tip)
         : null;
     this.updateStatus(allowed, frame.dominant);
     this.flushUi(false);
@@ -111,8 +110,10 @@ export class DrawMode implements SpatialMode {
     if (this.hover) r.drawHighlight(c2d, vp, this.hover);
     if (this.pen) {
       r.drawLive(c2d, vp, this.pen.look, this.builder.points, this.builder.liveCount());
-    } else if (this.hasAim) {
-      r.drawCursor(c2d, vp, this.aim, this.tool === 'pen' ? this.look() : null);
+    }
+    // The pen tip follows the fingertip every frame, even between tracker readings.
+    if (this.hasTip) {
+      r.drawCursor(c2d, vp, this.tip, this.tool === 'pen' ? (this.pen?.look ?? this.look()) : null);
     }
   }
 
@@ -159,7 +160,7 @@ export class DrawMode implements SpatialMode {
     this.endPen(true);
     this.endEraser(true);
     this.hover = null;
-    this.hasAim = false;
+    this.hasTip = false;
   }
 
   dispose(): void {
@@ -169,14 +170,13 @@ export class DrawMode implements SpatialMode {
 
   // ---------------------------------------------------------------------------------------------
 
-  /** The pen position: the hand's steady aim (cursor), in view units. */
-  private readAim(frame: InteractionFrame, side: HandSide): void {
-    const ctx = this.ctx;
-    const cursor = frame.cursors[side];
-    this.hasAim = !!ctx && !!cursor;
-    if (!ctx || !cursor) return;
-    ctx.coords.ndcToScreen(cursor.ndc, this.screen);
-    ctx.viewport.screenToView(this.screen, this.aim);
+  /** The pen position: the hand's index fingertip (smoothed landmarks, view units). */
+  private readTip(frame: InteractionFrame, side: HandSide): void {
+    const tip = frame.hands[side]?.landmarks[INDEX_TIP];
+    this.hasTip = !!tip;
+    if (!tip) return;
+    this.tip.x = tip.x;
+    this.tip.y = tip.y;
   }
 
   private look(): StrokeLook {
@@ -189,11 +189,11 @@ export class DrawMode implements SpatialMode {
     if (this.tool === 'pen') {
       if (!ctx.capture.capture(side, PEN_ID, this.now, () => this.endPen(true))) return;
       this.pen = { side, look: this.look() };
-      this.builder.begin(this.aim.x, this.aim.y, this.now);
+      this.builder.begin(this.tip.x, this.tip.y, this.now);
     } else {
       if (!ctx.capture.capture(side, ERASER_ID, this.now, () => this.endEraser(true))) return;
       this.eraser = { side, before: this.strokes };
-      this.eraseAt(this.aim);
+      this.eraseAt(this.tip);
     }
   }
 
@@ -201,11 +201,15 @@ export class DrawMode implements SpatialMode {
     const pen = this.pen;
     const ctx = this.ctx;
     if (!pen || !ctx) return;
-    if (!g || g.pinch.phase !== 'active') {
+    if (!g || g.point.phase !== 'active') {
       ctx.capture.release(pen.side, 'released'); // → endPen(true)
       return;
     }
-    if (this.hasAim) this.builder.add(this.aim.x, this.aim.y, this.now, ctx.viewport.videoAspect);
+    // Only real tracker readings go into the stroke: the predicted in-between positions overshoot
+    // when the finger turns, which put bulges up to ~22 px into lines (D48).
+    if (this.hasTip && this.newReading) {
+      this.builder.add(this.tip.x, this.tip.y, this.now, ctx.viewport.videoAspect);
+    }
   }
 
   /** Lift the pen: the stroke joins the drawing as one undo step (or is discarded). */
@@ -226,14 +230,14 @@ export class DrawMode implements SpatialMode {
   private continueEraser(g: HandGestures | undefined): void {
     const eraser = this.eraser;
     if (!eraser || !this.ctx) return;
-    if (!g || g.pinch.phase !== 'active') {
+    if (!g || g.point.phase !== 'active') {
       this.ctx.capture.release(eraser.side, 'released'); // → endEraser(true)
       return;
     }
-    if (this.hasAim) this.eraseAt(this.aim);
+    if (this.hasTip) this.eraseAt(this.tip);
   }
 
-  /** Every stroke touched while the pinch was held goes, as one undo step (or all come back). */
+  /** Every stroke touched while pointing goes, as one undo step (or all come back). */
   private endEraser(commit: boolean): void {
     const eraser = this.eraser;
     const ctx = this.ctx;
@@ -268,11 +272,12 @@ export class DrawMode implements SpatialMode {
 
   private updateStatus(allowed: boolean, dominant: HandSide): void {
     let text: string;
-    if (this.pen) text = 'Drawing — release the pinch to lift the pen';
-    else if (this.eraser) text = 'Erasing — every stroke you touch goes; release to finish';
+    if (this.pen) text = 'Drawing — lower your finger or open your hand to lift the pen';
+    else if (this.eraser) text = 'Erasing — every stroke your fingertip touches goes';
     else if (!allowed) text = 'Both hands pinching — nothing is drawn';
-    else if (this.tool === 'eraser') text = 'Eraser — pinch a stroke to remove it · X for the pen';
-    else text = `Pen — pinch with your ${dominant} hand to draw · X for the eraser`;
+    else if (this.tool === 'eraser') {
+      text = 'Eraser — point at strokes to remove them (red = will go) · X for the pen';
+    } else text = `Pen — point your ${dominant} index finger to draw · X for the eraser`;
     this.ctx?.emitStatus(text);
   }
 

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { DEFAULT_SETTINGS } from '@/config/tuning';
 import { FixturePlaybackSource, type LandmarkFixture } from '@/core/input';
 import type {
+  GestureState,
   HandGestures,
   HandSide,
   InteractionFrame,
@@ -210,7 +211,15 @@ export class ModeRig {
   }
 
   pinch(side: HandSide, down: boolean): void {
-    const p = this.gestures(side).pinch;
+    this.press(this.gestures(side).pinch, down);
+  }
+
+  /** Index finger out, others curled (Air Draw's pen). */
+  point(side: HandSide, down: boolean): void {
+    this.press(this.gestures(side).point, down);
+  }
+
+  private press(p: GestureState, down: boolean): void {
     if (down && p.phase !== 'active') {
       p.phase = 'active';
       p.justStarted = true;
@@ -223,19 +232,22 @@ export class ModeRig {
     }
   }
 
-  step(ms = 1000 / 60): void {
+  /** One frame. `reading` = a new tracker reading arrived (false = a predicted in-between frame). */
+  step(ms = 1000 / 60, reading = true): void {
     this.now += ms;
     this.frame.timestamp = this.now;
     this.frame.dt = ms / 1000;
     this.frame.hands.timestamp = this.now;
+    if (reading) this.frame.hands.inferenceTimestamp = this.now;
     this.mc.update(this.frame);
     for (const side of ['left', 'right'] as const) {
-      const p = this.frame.gestures[side]?.pinch;
-      if (!p) continue;
-      p.justStarted = false;
-      if (p.justEnded) {
-        p.justEnded = false;
-        p.phase = 'idle';
+      const g = this.frame.gestures[side];
+      for (const p of g ? [g.pinch, g.point] : []) {
+        p.justStarted = false;
+        if (p.justEnded) {
+          p.justEnded = false;
+          p.phase = 'idle';
+        }
       }
     }
     const two = this.frame.gestures.twoHand;

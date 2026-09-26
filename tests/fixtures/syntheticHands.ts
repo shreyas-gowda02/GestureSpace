@@ -198,6 +198,22 @@ export function pinchDragScenario(jitter = 0, seed = 1): LandmarkFixture {
 }
 
 /**
+ * Air Draw: right hand points (index out, 0.6 s), holds still (to 1.2 s), then the fingertip
+ * traces a wave to the right (1.2–2.8 s), and the hand opens (3.2 s). Optional jitter.
+ */
+export function pointDrawScenario(jitter = 0, seed = 1): LandmarkFixture {
+  const rng = makeRng(seed);
+  return scenario(`point-draw${jitter ? '-jittery' : ''}`, 3.8, 30, (t) => {
+    const k = ramp(t, 1.2, 1.6);
+    return [
+      rawHand('right', placeHand(poseAt(t, [[0, 'open'], [0.6, 'point'], [3.2, 'open']]), {
+        side: 'right', wristX: 0.45 - 0.2 * k, wristY: 0.8 + 0.05 * Math.sin(k * Math.PI * 2), palm: 0.16, jitter, rng,
+      })),
+    ];
+  });
+}
+
+/**
  * Voxel Builder push / pull: right hand pinches (0.6 s) where pinchDragScenario starts, then
  * pulls toward the camera (palm ×1.4 over 1.2–2.2 s) keeping its pinch on the same spot — the hand
  * grows around the pinched fingertips, as when you reach toward something — releases (2.8 s).
