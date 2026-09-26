@@ -10,7 +10,7 @@ import { disposeObject3D } from '@/scene/SceneManager';
 import { InteractionPlane } from '@/spatial/CoordinateMapper';
 import type { ModeContext, SpatialMode } from './types';
 
-export type PlaceholderShape = 'panel' | 'icosahedron' | 'cylinder' | 'torus' | 'octahedron';
+export type PlaceholderShape = 'icosahedron' | 'cylinder' | 'torus' | 'octahedron';
 
 export interface PlaceholderSpec {
   id: ModeId;
@@ -23,8 +23,6 @@ export interface PlaceholderSpec {
 
 function makeGeometry(shape: PlaceholderShape): THREE.BufferGeometry {
   switch (shape) {
-    case 'panel':
-      return new THREE.BoxGeometry(5, 3, 0.2);
     case 'icosahedron':
       return new THREE.IcosahedronGeometry(2, 0);
     case 'cylinder':

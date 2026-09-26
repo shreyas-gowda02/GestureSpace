@@ -386,6 +386,40 @@ export const TUNING = {
     uiHz: 10,
   },
 
+  /** Spatial Panel (§14) and the shared Texture Surface (§17). Sizes in scene units (the view is
+   * ≈ 18.6 units tall at z = 0). */
+  panel: {
+    /** Bundled sample pictures (public/textures). */
+    samples: [
+      { id: 'aurora', name: 'Aurora', file: 'textures/aurora.svg' },
+      { id: 'sunset', name: 'Sunset', file: 'textures/sunset.svg' },
+      { id: 'synthwave', name: 'Synthwave', file: 'textures/synthwave.svg' },
+    ],
+    /** The panel's longer side at rest (≈ 36% of the view width). */
+    size: 12,
+    /** Where it rests (Reset puts it back): centre, a little above the middle. */
+    restY: 0.8,
+    /** Aspect (width / height) shown while a picture is still loading. */
+    defaultAspect: 1.6,
+    /** Rounded corners, as a fraction of the shorter side. */
+    cornerRadius: 0.06,
+    /** Room around the picture for the outer glow (the quad is this much bigger each side). */
+    glowMargin: 0.9,
+    /** Accent colour of the rim and handles. */
+    accent: '#21d4d8',
+    /**
+     * Both pinches must be on the panel or within this far of its edge (scene units at the
+     * panel's own size, ≈ 58 px at 720p for a resting panel) for a two-hand pinch to grab it.
+     */
+    captureMargin: 1.5,
+    /** Grab handles: brightness idle / a hand in reach / held. */
+    handleGlow: { idle: 0.35, near: 0.75, held: 1 },
+    /** Limits on the panel's size (× its resting size). */
+    scaleRange: { min: 0.3, max: 3 },
+    /** Tool-panel updates are published at most this often. */
+    uiHz: 10,
+  },
+
   history: {
     cap: 200,
   },

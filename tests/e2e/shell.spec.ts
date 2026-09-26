@@ -136,3 +136,47 @@ test('air draw tools: X toggles the eraser; colour, width and glow buttons work'
   await expect(tools.getByRole('button', { name: 'Glow off' })).toBeVisible();
   await expect(tools).toContainText('0 strokes');
 });
+
+test('spatial panel: pictures, camera snapshot, live camera and your own picture', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await openApp(page);
+  await page.keyboard.press('2');
+  const pressed = (name: string | RegExp) =>
+    expect(page.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+
+  // Camera content waits for the camera.
+  await expect(page.getByRole('button', { name: 'Take a camera snapshot' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Live camera' })).toBeDisabled();
+  await pressed('Aurora');
+  await page.getByRole('button', { name: 'Sunset' }).click();
+  await pressed('Sunset');
+
+  await page.getByRole('button', { name: 'Enable camera' }).click();
+  await expect(page.getByText('Camera on')).toBeVisible();
+  await page.getByRole('button', { name: 'Take a camera snapshot' }).click();
+  await pressed('Take another snapshot');
+  await page.getByRole('button', { name: 'Live camera' }).click();
+  await pressed('Live camera');
+  await page.getByRole('button', { name: 'Animated' }).click();
+  await pressed('Animated');
+
+  // A 1×1 PNG from "the user's computer".
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'dot.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      'base64',
+    ),
+  });
+  await pressed(/Your picture: dot\.png/);
+  await page.getByRole('button', { name: 'Synthwave' }).click();
+  await pressed('Synthwave');
+  expect(errors).toEqual([]);
+});

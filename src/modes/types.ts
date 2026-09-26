@@ -8,6 +8,7 @@ import type {
   InteractionFrame,
   ModeId,
   ModeUiStates,
+  PanelContent,
   Settings,
   VoxelMaterial,
   VoxelTool,
@@ -46,7 +47,11 @@ export type ToolAction =
   | { type: 'drawTool'; tool: DrawTool }
   | { type: 'drawColor'; color: string }
   | { type: 'drawWidth'; width: number }
-  | { type: 'drawGlow' };
+  | { type: 'drawGlow' }
+  /** Show a sample, the live camera or the animated pattern; 'snapshot' takes a new one. */
+  | { type: 'panelContent'; content: Exclude<PanelContent, 'file'> }
+  /** The user's own picture: an object URL the panel takes ownership of (and revokes). */
+  | { type: 'panelFile'; url: string; name: string };
 
 export type ModeAction = KeyAction | ToolAction;
 

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1140"/>
+      <stop offset="0.35" stop-color="#5b2a78"/>
+      <stop offset="0.62" stop-color="#e2566b"/>
+      <stop offset="0.78" stop-color="#ffab5c"/>
+      <stop offset="1" stop-color="#ffd58a"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff4c2"/>
+      <stop offset="0.6" stop-color="#ffd27a"/>
+      <stop offset="1" stop-color="#ff9a52"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd27a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ff7a52" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="1040" cy="560" r="330" fill="url(#halo)"/>
+  <circle cx="1040" cy="560" r="120" fill="url(#sun)"/>
+  <g fill="#ffe7c2" opacity="0.5">
+    <ellipse cx="360" cy="250" rx="170" ry="16"/><ellipse cx="470" cy="285" rx="120" ry="10"/>
+    <ellipse cx="1260" cy="330" rx="200" ry="14"/><ellipse cx="1180" cy="360" rx="110" ry="9"/>
+  </g>
+  <path d="M0 640 L 160 540 L 300 600 L 470 470 L 620 560 L 760 500 L 900 590 L 1080 480 L 1230 570 L 1380 500 L 1600 590 L 1600 1000 L 0 1000 Z" fill="#9b4a7a"/>
+  <path d="M0 720 L 140 640 L 320 700 L 480 610 L 650 690 L 820 630 L 1000 710 L 1170 630 L 1340 700 L 1480 650 L 1600 690 L 1600 1000 L 0 1000 Z" fill="#6b2f68"/>
+  <path d="M0 800 L 180 730 L 360 790 L 560 720 L 760 800 L 950 740 L 1150 810 L 1350 740 L 1600 800 L 1600 1000 L 0 1000 Z" fill="#43214f"/>
+  <path d="M0 880 L 220 820 L 430 870 L 650 830 L 880 890 L 1100 840 L 1320 890 L 1600 850 L 1600 1000 L 0 1000 Z" fill="#241433"/>
+  <g stroke="#241433" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M520 330 q 14 -12 28 0 q 14 -12 28 0"/>
+    <path d="M590 360 q 10 -9 20 0 q 10 -9 20 0"/>
+    <path d="M470 380 q 8 -7 16 0 q 8 -7 16 0"/>
+  </g>
+</svg>

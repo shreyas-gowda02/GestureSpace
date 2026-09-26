@@ -165,8 +165,8 @@ describe('registry + PlaceholderMode', () => {
     const statuses: string[] = [];
     const base = baseContext(statuses);
     const mc = new ModeController(base, MODE_FACTORIES);
-    mc.switchTo('panel');
-    const root = base.scene.getObjectByName('Mode:panel');
+    mc.switchTo('strings');
+    const root = base.scene.getObjectByName('Mode:strings');
     expect(root?.visible).toBe(true);
     expect(base.cursors.targetCount).toBe(1);
 
@@ -189,7 +189,7 @@ describe('registry + PlaceholderMode', () => {
       },
       cursors: { right: cursor },
       dominant: 'right',
-      activeMode: 'panel',
+      activeMode: 'strings',
     };
     const hitShape = () => {
       root?.updateMatrixWorld(true);
@@ -199,7 +199,7 @@ describe('registry + PlaceholderMode', () => {
       const hits = ray.intersectObjects(root ? [root] : [], true);
       const first = hits[0];
       cursor.hit = first
-        ? { point: first.point, kind: 'object', objectId: 'panel-placeholder' }
+        ? { point: first.point, kind: 'object', objectId: 'strings-placeholder' }
         : undefined;
     };
 
@@ -208,7 +208,7 @@ describe('registry + PlaceholderMode', () => {
     pinch.phase = 'active';
     pinch.justStarted = true;
     mc.update(frame);
-    expect(base.capture.get('right')?.targetId).toBe('panel-placeholder');
+    expect(base.capture.get('right')?.targetId).toBe('strings-placeholder');
     expect(statuses.at(-1)).toContain('captured');
 
     // Move the hand → the shape follows (no jump on grab).
@@ -232,7 +232,7 @@ describe('registry + PlaceholderMode', () => {
     mc.switchTo('draw');
     expect(root?.visible).toBe(false);
     mc.dispose();
-    expect(base.scene.getObjectByName('Mode:panel')).toBeUndefined();
+    expect(base.scene.getObjectByName('Mode:strings')).toBeUndefined();
   });
 });
 
@@ -240,8 +240,8 @@ describe('left/right renamed while dragging (D42)', () => {
   it('the placeholder keeps following the hand that holds it', () => {
     const base = baseContext();
     const mc = new ModeController(base, MODE_FACTORIES);
-    mc.switchTo('panel');
-    const root = base.scene.getObjectByName('Mode:panel');
+    mc.switchTo('strings');
+    const root = base.scene.getObjectByName('Mode:strings');
     const pinch = makeGestureState();
     const hand = {
       pinch,
@@ -255,7 +255,7 @@ describe('left/right renamed while dragging (D42)', () => {
       side: 'right',
       screen: { x: 640, y: 360 },
       ndc: { x: 0, y: 0 },
-      hit: { point: { x: 0, y: 0, z: 1.5 }, kind: 'object', objectId: 'panel-placeholder' },
+      hit: { point: { x: 0, y: 0, z: 1.5 }, kind: 'object', objectId: 'strings-placeholder' },
     };
     const frame: InteractionFrame = {
       timestamp: 0,
@@ -264,12 +264,12 @@ describe('left/right renamed while dragging (D42)', () => {
       gestures: { right: hand, twoHand: makeTwoHandState() },
       cursors: { right: cursor },
       dominant: 'right',
-      activeMode: 'panel',
+      activeMode: 'strings',
     };
     pinch.phase = 'active';
     pinch.justStarted = true;
     mc.update(frame);
-    expect(base.capture.get('right')?.targetId).toBe('panel-placeholder');
+    expect(base.capture.get('right')?.targetId).toBe('strings-placeholder');
 
     // The tracker renames the holding hand: Core moves the captures and tells the mode.
     base.capture.swapSides();
@@ -278,7 +278,7 @@ describe('left/right renamed while dragging (D42)', () => {
     frame.gestures = { left: hand, twoHand: makeTwoHandState() };
     frame.cursors = { left: { ...cursor, side: 'left', ndc: { x: 0.3, y: 0.2 } } };
     mc.update(frame);
-    expect(base.capture.get('left')?.targetId).toBe('panel-placeholder'); // still held…
+    expect(base.capture.get('left')?.targetId).toBe('strings-placeholder'); // still held…
     expect(root?.position.x).toBeGreaterThan(1); // …and still following the hand
     mc.dispose();
   });

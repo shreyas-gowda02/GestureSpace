@@ -4,6 +4,7 @@
 import { MODE_IDS, type ModeId } from '@/core/types';
 import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
 import { DrawMode } from './draw/DrawMode';
+import { PanelMode } from './panel/PanelMode';
 import type { ModeFactory } from './types';
 import { VoxelMode } from './voxel/VoxelMode';
 
@@ -53,10 +54,16 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     tagline: 'Hold a floating image between your hands.',
     phase: 7,
     help: [
-      { gesture: 'Pinch both handles', action: 'Capture the panel' },
-      { gesture: 'Move hands together', action: 'Move' },
-      { gesture: 'Spread / close hands', action: 'Stretch' },
-      { gesture: 'Tilt hand-to-hand line', action: 'Rotate' },
+      {
+        gesture: 'Both hands pinch on the panel',
+        action: 'Grab it (the edge handles glow in reach)',
+      },
+      { gesture: 'Move both hands', action: 'Move it' },
+      { gesture: 'Spread / close hands', action: 'Bigger / smaller' },
+      { gesture: 'Tilt the hand-to-hand line', action: 'Rotate it' },
+      { gesture: 'Let go of a pinch', action: 'Drop it (Ctrl+Z undoes the move)' },
+      { gesture: 'Tool panel', action: 'Pictures, camera snapshot, live camera, your own picture' },
+      { gesture: 'R', action: 'Reset: back to the middle' },
     ],
   },
   draw: {
@@ -131,28 +138,27 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
 export const MODE_LIST: readonly ModeMeta[] = MODE_IDS.map((id) => MODE_META[id]);
 
 /** Experiences that are fully built (the rest still run as PlaceholderMode). */
-export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>(['voxel', 'draw']);
+export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>(['voxel', 'panel', 'draw']);
 
 /** Placeholder look per experience until its real implementation lands. */
 const PLACEHOLDERS: Record<
-  Exclude<ModeId, 'voxel' | 'draw'>,
+  Exclude<ModeId, 'voxel' | 'panel' | 'draw'>,
   { shape: PlaceholderShape; color: string }
 > = {
-  panel: { shape: 'panel', color: '#6c8cff' },
   strings: { shape: 'icosahedron', color: '#a6ff3d' },
   filter: { shape: 'cylinder', color: '#ffb62e' },
   portal: { shape: 'torus', color: '#b36bff' },
   objectLab: { shape: 'octahedron', color: '#ff7a59' },
 };
 
-function placeholder(id: Exclude<ModeId, 'voxel' | 'draw'>): ModeFactory {
+function placeholder(id: Exclude<ModeId, 'voxel' | 'panel' | 'draw'>): ModeFactory {
   const meta = MODE_META[id];
   return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
 }
 
 export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
   voxel: () => new VoxelMode(),
-  panel: placeholder('panel'),
+  panel: () => new PanelMode(),
   draw: () => new DrawMode(),
   strings: placeholder('strings'),
   filter: placeholder('filter'),

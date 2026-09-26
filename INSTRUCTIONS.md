@@ -3,12 +3,12 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-27, after the Voxel Builder fist turn (`ff903a6`)._
+_Last updated: 2026-09-27, Phase 7 (Spatial Panel)._
 
 | Key | Experience          | Status                                                                 |
 | --- | ------------------- | ---------------------------------------------------------------------- |
 | 1   | Voxel Builder       | ✅ Ready (building, depth layers, move / resize / twist, 3D fist turn) |
-| 2   | Spatial Panel       | 🚧 Placeholder — coming in Phase 7                                     |
+| 2   | Spatial Panel       | ✅ Ready (hold, move, resize, rotate; pictures, camera, your own)      |
 | 3   | Air Draw            | ✅ Ready (point to draw, fist eraser)                                  |
 | 4   | Hand Strings        | 🚧 Placeholder — coming in Phase 9                                     |
 | 5   | Filter Lab          | 🚧 Placeholder — coming in Phase 10                                    |
@@ -77,19 +77,19 @@ Tips:
 
 ## 3. Keyboard shortcuts (all experiences)
 
-| Key                        | Does                                                         |
-| -------------------------- | ------------------------------------------------------------ |
-| **1 – 7**                  | Switch experience (see the table at the top)                 |
-| **Ctrl+Z**                 | Undo (each experience has its own undo history)              |
-| **Ctrl+Shift+Z**           | Redo                                                         |
-| **C**                      | Clear the current experience (undoable)                      |
-| **R**                      | Reset view / position of the current experience              |
-| **X**                      | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw) |
-| **Q / E**                  | Voxel Builder: depth layer − / +                             |
-| **L**                      | Voxel Builder: Depth Lock on / off                           |
-| **`** (backtick)           | Debug panel (left of the 1 key)                              |
-| **Esc**                    | Close panels and drop whatever a hand is holding             |
-| H, ← / →, [ / ], D, Delete | Reserved for later phases (Help, Filter Lab, 3D Object Lab)  |
+| Key                        | Does                                                          |
+| -------------------------- | ------------------------------------------------------------- |
+| **1 – 7**                  | Switch experience (see the table at the top)                  |
+| **Ctrl+Z**                 | Undo (each experience has its own undo history)               |
+| **Ctrl+Shift+Z**           | Redo                                                          |
+| **C**                      | Clear the current experience (undoable; nothing in the Panel) |
+| **R**                      | Reset view / position of the current experience               |
+| **X**                      | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw)  |
+| **Q / E**                  | Voxel Builder: depth layer − / +                              |
+| **L**                      | Voxel Builder: Depth Lock on / off                            |
+| **`** (backtick)           | Debug panel (left of the 1 key)                               |
+| **Esc**                    | Close panels and drop whatever a hand is holding              |
+| H, ← / →, [ / ], D, Delete | Reserved for later phases (Help, Filter Lab, 3D Object Lab)   |
 
 Switching experiences keeps what you made in each one, including its undo history. Anything a
 hand is holding at that moment is let go first.
@@ -221,7 +221,78 @@ New blocks go on the **active layer** (the faint grid). The tool panel shows it 
 
 ---
 
-## 5. Air Draw (key 3)
+## 5. Spatial Panel (key 2)
+
+A picture floating in the air that you hold between your hands, like holding up a photo or a
+tablet.
+
+### What you see
+
+- A picture in the middle, with **rounded corners** and a **glowing turquoise rim**.
+- Two small **grab handles**, one on the middle of the left edge and one on the right edge:
+  - **dim:** no hand near;
+  - **brighter:** a hand is over that half of the panel (in reach);
+  - **bright white:** both hands are holding it.
+
+### Grabbing, moving, resizing and rotating
+
+1. Put **both hands on the panel**: over the picture, or just outside its edge (≈ 60 px). The
+   handles brighten and the status bar says "Both hands on the panel — pinch to grab it".
+2. **Pinch with both hands.** The status bar says "Holding the panel".
+3. While holding:
+   - **move both hands**: it follows;
+   - **pull them apart**: bigger; **push them together**: smaller;
+   - **tilt the line between your hands** like a steering wheel: it rotates.
+4. **Let go of either pinch** to drop it. It stays where you left it.
+
+- Each pinch stays glued to the spot it grabbed, and the panel doesn't jump when you grab it.
+- Size is limited to 0.3× – 3× of its normal size.
+- A two-hand pinch **away from the panel** does nothing ("Pinch on the panel (or its glowing
+  edges) to grab it").
+- A **one-hand pinch** does nothing here; the panel always needs both hands.
+- If one hand leaves the picture mid-grab, the panel **holds still** and carries on when the hand
+  returns.
+- Hands very close together don't resize, and rotating fades out as they meet, so crossing your
+  hands doesn't flip it. This works the same as the Voxel Builder's two-hand grab.
+
+### What it shows (tool panel)
+
+| Button                                          | Shows                                                                                                                  |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Aurora** (default), **Sunset**, **Synthwave** | Bundled sample pictures                                                                                                |
+| **Animated**                                    | A slowly flowing colour pattern                                                                                        |
+| **Live camera**                                 | Your camera, live, mirrored like the main view (needs the camera on)                                                   |
+| **Take a camera snapshot**                      | Freezes the current camera picture onto the panel; press **Take another snapshot** for a new one (needs the camera on) |
+| **Open your own picture…**                      | Any picture file from your computer. It never leaves your computer. The button then shows its name                     |
+| **Reset panel** (or **R**)                      | Back to the middle, normal size, straight                                                                              |
+
+- The panel takes the **shape of what it shows**: wide pictures are wide, portrait pictures stand
+  tall. The longer side stays the same size.
+- **Live camera** and **Take a camera snapshot** are greyed out until the camera is on.
+- Changing what it shows is **not** an undo step; moves and Reset are.
+
+### Undo and reset
+
+- **Ctrl+Z / Undo:** undoes a whole grab (move + resize + rotate) in one step.
+- **R / Reset:** puts the panel back in the middle, normal size, straight. Undoable, so Ctrl+Z brings
+  it back to where you had it.
+- **C / Clear** does nothing in the Panel.
+- Pressing Undo mid-grab finishes the grab first, then undoes it.
+
+### Status messages
+
+| Message                                                                | Meaning                                      |
+| ---------------------------------------------------------------------- | -------------------------------------------- |
+| Pinch the panel with both hands to grab it · R to reset                | Ready                                        |
+| Both hands on the panel — pinch to grab it                             | Both hands are in reach                      |
+| Holding the panel — move, spread or tilt your hands; let go to drop it | Held with both hands                         |
+| Pinch on the panel (or its glowing edges) to grab it                   | Both hands pinched, but not on the panel     |
+| Hand lost — the panel holds still until it is back                     | A hand left mid-grab                         |
+| Start the camera first                                                 | A camera button was used with the camera off |
+
+---
+
+## 6. Air Draw (key 3)
 
 Draw glowing lines in the air with your index fingertip.
 
@@ -288,16 +359,13 @@ Draw glowing lines in the air with your index fingertip.
 
 ---
 
-## 6. Experiences still to come (placeholders for now)
+## 7. Experiences still to come (placeholders for now)
 
 Each unbuilt experience currently shows a **spinning shape**. Point at it (your cursor ring turns
 white) and **pinch to grab and drag it**; let go to drop it. This checks the hand controls work
 before the real experience arrives. Planned controls (subject to change; this file will be updated
 when each is built):
 
-- **2 · Spatial Panel (Phase 7):** a floating picture held between your hands. Pinch both of its
-  handles to grab it, move your hands to move it, spread them to stretch it, and tilt the line
-  between your hands to rotate it.
 - **4 · Hand Strings (Phase 9):** glowing particles and elastic threads on your hand joints; just
   move your hands.
 - **5 · Filter Lab (Phase 10):** a "magic lens" strip that filters the camera behind it (thermal,
@@ -311,7 +379,7 @@ when each is built):
 
 ---
 
-## 7. Debug panel and recordings
+## 8. Debug panel and recordings
 
 Press **`** (backtick) or click **Debug**.
 
@@ -327,7 +395,7 @@ Press **`** (backtick) or click **Debug**.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Problem                                       | Try                                                                                                                         |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -343,6 +411,9 @@ Press **`** (backtick) or click **Debug**.
 
 ## Changelog of controls
 
+- **2026-09-27** — **Spatial Panel built**: hold a picture with both hands (move, resize, rotate),
+  glowing handles, sample pictures, animated pattern, live camera, camera snapshot, your own
+  picture, Reset (undoable).
 - **2026-09-27** — Voxel Builder: **fist + move turns the structure in 3D** (spin / tip). Two-hand
   grabs and **Reset view are now undoable**; a lost hand freezes a grab; hands crossing or nearly
   touching no longer flip or blow up the structure.

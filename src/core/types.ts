@@ -177,8 +177,22 @@ export interface DrawUiState {
   count: number;
 }
 
+/** Bundled sample pictures (TUNING.panel.samples). */
+export type PanelSampleId = 'aurora' | 'sunset' | 'synthwave';
+/** What the Spatial Panel shows. */
+export type PanelContent = PanelSampleId | 'snapshot' | 'camera' | 'animated' | 'file';
+
+export interface PanelUiState {
+  content: PanelContent;
+  /** Name of the user's own picture, when one is open. */
+  fileName: string | null;
+  /** Both hands are holding the panel. */
+  held: boolean;
+}
+
 /** Per experience: what its tool panel shows. Grows as experiences land. */
 export interface ModeUiStates {
   voxel: VoxelUiState;
+  panel: PanelUiState;
   draw: DrawUiState;
 }

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#02040f"/>
+      <stop offset="0.45" stop-color="#071a33"/>
+      <stop offset="0.8" stop-color="#0d3150"/>
+      <stop offset="1" stop-color="#123c5c"/>
+    </linearGradient>
+    <linearGradient id="bandA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3dffb0" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#3dffb0" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#21d4d8" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="bandB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b36bff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#b36bff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3dffb0" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0f3a55"/>
+      <stop offset="1" stop-color="#03101e"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-50%" width="140%" height="200%">
+      <feGaussianBlur stdDeviation="28"/>
+    </filter>
+    <filter id="softer" x="-20%" y="-50%" width="140%" height="200%">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <g fill="#ffffff">
+    <circle cx="80" cy="60" r="1.6" opacity="0.8"/><circle cx="210" cy="140" r="1.2" opacity="0.6"/>
+    <circle cx="330" cy="40" r="2" opacity="0.9"/><circle cx="420" cy="190" r="1.2" opacity="0.5"/>
+    <circle cx="560" cy="90" r="1.6" opacity="0.8"/><circle cx="690" cy="30" r="1.2" opacity="0.6"/>
+    <circle cx="770" cy="160" r="1.8" opacity="0.7"/><circle cx="900" cy="70" r="1.2" opacity="0.6"/>
+    <circle cx="1010" cy="130" r="2" opacity="0.9"/><circle cx="1120" cy="50" r="1.4" opacity="0.7"/>
+    <circle cx="1240" cy="170" r="1.2" opacity="0.5"/><circle cx="1330" cy="80" r="1.8" opacity="0.8"/>
+    <circle cx="1460" cy="30" r="1.2" opacity="0.6"/><circle cx="1540" cy="150" r="1.6" opacity="0.7"/>
+    <circle cx="140" cy="260" r="1.2" opacity="0.4"/><circle cx="620" cy="250" r="1.4" opacity="0.5"/>
+    <circle cx="1180" cy="280" r="1.2" opacity="0.4"/><circle cx="1500" cy="260" r="1.4" opacity="0.5"/>
+    <circle cx="860" cy="230" r="1" opacity="0.4"/><circle cx="300" cy="320" r="1" opacity="0.35"/>
+  </g>
+  <g filter="url(#soft)">
+    <path d="M-100 420 C 200 180, 420 520, 700 300 S 1150 160, 1350 330 S 1650 250, 1750 200 L 1750 520 C 1500 560, 1300 440, 1050 520 S 500 640, 250 560 S -50 620, -100 600 Z" fill="url(#bandA)"/>
+    <path d="M-100 330 C 150 240, 380 380, 620 250 S 1000 120, 1250 230 S 1600 150, 1750 120 L 1750 300 C 1450 330, 1250 260, 1000 330 S 450 420, 200 380 S -50 420, -100 420 Z" fill="url(#bandB)"/>
+  </g>
+  <g filter="url(#softer)" opacity="0.8">
+    <path d="M150 470 C 380 300, 560 520, 820 360 S 1200 250, 1450 380" stroke="#8dffd6" stroke-width="10" fill="none"/>
+  </g>
+  <path d="M0 700 L 140 610 L 230 650 L 380 520 L 470 590 L 560 540 L 700 640 L 820 560 L 960 650 L 1080 540 L 1180 600 L 1300 500 L 1430 610 L 1600 560 L 1600 760 L 0 760 Z" fill="#0a1a2c"/>
+  <path d="M0 760 L 120 690 L 260 730 L 400 660 L 540 720 L 660 680 L 800 740 L 950 690 L 1100 740 L 1240 680 L 1380 730 L 1500 700 L 1600 720 L 1600 780 L 0 780 Z" fill="#050d18"/>
+  <rect y="780" width="1600" height="220" fill="url(#lake)"/>
+  <g filter="url(#soft)" opacity="0.35" transform="translate(0 1560) scale(1 -1)">
+    <path d="M-100 420 C 200 180, 420 520, 700 300 S 1150 160, 1350 330 S 1650 250, 1750 200 L 1750 520 C 1500 560, 1300 440, 1050 520 S 500 640, 250 560 S -50 620, -100 600 Z" fill="url(#bandA)"/>
+  </g>
+  <g stroke="#6fe8c8" stroke-opacity="0.25" stroke-width="2">
+    <line x1="420" y1="830" x2="640" y2="830"/><line x1="900" y1="860" x2="1180" y2="860"/>
+    <line x1="220" y1="900" x2="380" y2="900"/><line x1="1250" y1="920" x2="1420" y2="920"/>
+  </g>
+</svg>

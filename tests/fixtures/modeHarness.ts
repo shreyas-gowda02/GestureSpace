@@ -16,7 +16,7 @@ import type {
 } from '@/core/types';
 import { GestureEngine, perceptionStep } from '@/gestures/GestureEngine';
 import { makeGestureState } from '@/gestures/stateMachine';
-import { makeTwoHandState } from '@/gestures/twoHand';
+import { makeTwoHandState, TwoHandTracker } from '@/gestures/twoHand';
 import { ModeController, type BaseContext } from '@/modes/ModeController';
 import { MODE_FACTORIES } from '@/modes/registry';
 import type { OverlayCanvas2D } from '@/scene/overlay';
@@ -187,6 +187,7 @@ export class ModeRig {
   readonly ui: Partial<ModeUiStates>[] = [];
   readonly frame: InteractionFrame;
   now = 0;
+  private twoHands: TwoHandTracker | null = null;
 
   constructor(mode: ModeId, base?: BaseContext) {
     this.base = base ?? baseContext(this.statuses, this.ui);
@@ -265,6 +266,14 @@ export class ModeRig {
     this.frame.dt = ms / 1000;
     this.frame.hands.timestamp = this.now;
     if (reading) this.frame.hands.inferenceTimestamp = this.now;
+    const { hands, gestures } = this.frame;
+    this.twoHands?.update(
+      hands.left,
+      gestures.left?.pinch,
+      hands.right,
+      gestures.right?.pinch,
+      VIEW_W / VIEW_H,
+    );
     this.mc.update(this.frame);
     for (const side of ['left', 'right'] as const) {
       const g = this.frame.gestures[side];
@@ -279,6 +288,15 @@ export class ModeRig {
     const two = this.frame.gestures.twoHand;
     two.justStarted = two.justEnded = false;
     two.cancelFirstHand = null;
+  }
+
+  /**
+   * From now on the two-hand state is computed from the hands' pinch points and pinches by a real
+   * TwoHandTracker every step (instead of being set by hand).
+   */
+  trackTwoHands(): void {
+    this.twoHands = new TwoHandTracker();
+    this.frame.gestures.twoHand = this.twoHands.state;
   }
 
   /** Several frames. */

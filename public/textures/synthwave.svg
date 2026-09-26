@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#07021a"/>
+      <stop offset="0.45" stop-color="#2a0b4d"/>
+      <stop offset="0.62" stop-color="#6d1470"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe45c"/>
+      <stop offset="0.55" stop-color="#ff7a45"/>
+      <stop offset="1" stop-color="#ff2b8f"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1a0536"/>
+      <stop offset="1" stop-color="#050010"/>
+    </linearGradient>
+    <mask id="stripes">
+      <rect x="500" y="200" width="600" height="600" fill="#fff"/>
+      <rect x="500" y="470" width="600" height="10" fill="#000"/>
+      <rect x="500" y="505" width="600" height="14" fill="#000"/>
+      <rect x="500" y="545" width="600" height="18" fill="#000"/>
+      <rect x="500" y="588" width="600" height="22" fill="#000"/>
+    </mask>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="sunGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="30"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <g fill="#ffffff">
+    <circle cx="120" cy="80" r="1.6" opacity="0.8"/><circle cx="300" cy="170" r="1.2" opacity="0.6"/>
+    <circle cx="440" cy="60" r="1.4" opacity="0.7"/><circle cx="1180" cy="90" r="1.6" opacity="0.8"/>
+    <circle cx="1330" cy="190" r="1.2" opacity="0.6"/><circle cx="1480" cy="70" r="1.8" opacity="0.8"/>
+    <circle cx="240" cy="300" r="1" opacity="0.5"/><circle cx="1400" cy="320" r="1" opacity="0.5"/>
+  </g>
+  <circle cx="800" cy="480" r="230" fill="#ff4f9a" opacity="0.5" filter="url(#sunGlow)"/>
+  <circle cx="800" cy="480" r="200" fill="url(#sun)" mask="url(#stripes)"/>
+  <path d="M0 620 L 120 560 L 210 590 L 330 520 L 430 580 L 520 600 L 1080 600 L 1170 570 L 1270 520 L 1380 585 L 1480 540 L 1600 600 L 1600 620 Z" fill="#12042a"/>
+  <rect y="620" width="1600" height="380" fill="url(#floor)"/>
+  <g stroke="#ff3ddb" stroke-width="2.5" filter="url(#glow)" opacity="0.9">
+    <line x1="0" y1="620" x2="1600" y2="620" stroke="#ff7af0" stroke-width="3"/>
+    <line x1="0" y1="632" x2="1600" y2="632"/>
+    <line x1="0" y1="650" x2="1600" y2="650"/>
+    <line x1="0" y1="676" x2="1600" y2="676"/>
+    <line x1="0" y1="712" x2="1600" y2="712"/>
+    <line x1="0" y1="762" x2="1600" y2="762"/>
+    <line x1="0" y1="830" x2="1600" y2="830"/>
+    <line x1="0" y1="922" x2="1600" y2="922"/>
+  </g>
+  <g stroke="#21d4ff" stroke-width="2.5" filter="url(#glow)" opacity="0.85">
+    <line x1="800" y1="620" x2="800" y2="1000"/>
+    <line x1="760" y1="620" x2="560" y2="1000"/><line x1="840" y1="620" x2="1040" y2="1000"/>
+    <line x1="720" y1="620" x2="320" y2="1000"/><line x1="880" y1="620" x2="1280" y2="1000"/>
+    <line x1="680" y1="620" x2="80" y2="1000"/><line x1="920" y1="620" x2="1520" y2="1000"/>
+    <line x1="640" y1="620" x2="-160" y2="1000"/><line x1="960" y1="620" x2="1760" y2="1000"/>
+    <line x1="600" y1="620" x2="-400" y2="1000"/><line x1="1000" y1="620" x2="2000" y2="1000"/>
+  </g>
+</svg>
