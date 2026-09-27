@@ -39,6 +39,21 @@ const MAX_THREADS = buildThreads('mesh').length / 4;
 const MAX_TRAIL_SEGMENTS = 2 * TIPS * (S.trail.samples - 1);
 const GRACE = TUNING.confidence.HAND_LOSS_GRACE_MS;
 const POINT_ATTRIBUTES = ['position', 'tint', 'size'] as const;
+/** Hue steps in the colour table (one per degree). */
+const HUES = 360;
+
+/** RGB (working colour space) for each whole-degree hue at the strings' saturation / lightness. */
+function hueTable(): Float32Array {
+  const t = new Float32Array(HUES * 3);
+  const c = new THREE.Color();
+  for (let i = 0; i < HUES; i++) {
+    c.setHSL(i / HUES, S.saturation, S.lightness);
+    t[i * 3] = c.r;
+    t[i * 3 + 1] = c.g;
+    t[i * 3 + 2] = c.b;
+  }
+  return t;
+}
 
 const TRAIL_LIFE: Record<TrailLength, number> = {
   off: 0,
@@ -122,14 +137,16 @@ class LineLayer {
   /** Draw the first `count` segments written this frame. */
   upload(count: number): void {
     this.geometry.instanceCount = count;
-    for (const b of this.buffers) b.needsUpdate = true;
+    for (let i = 0; i < this.buffers.length; i++) {
+      const b = this.buffers[i];
+      if (b) b.needsUpdate = true;
+    }
   }
 
   setResolution(w: number, h: number): void {
-    for (const l of this.lines) {
-      if (l.material.resolution.x !== w || l.material.resolution.y !== h) {
-        l.material.resolution.set(w, h);
-      }
+    for (let i = 0; i < this.lines.length; i++) {
+      const r = this.lines[i]?.material.resolution;
+      if (r && (r.x !== w || r.y !== h)) r.set(w, h);
     }
   }
 
@@ -176,11 +193,23 @@ export class StringsMode implements SpatialMode {
   private now = 0;
   private uiDirty = true;
   private lastUi = -Infinity;
+  /**
+   * View point (x, y) → scene point on the z = 0 plane: origin, per-x and per-y steps (a plane
+   * facing the camera maps linearly). Worked out once per frame, so each joint is plain maths.
+   */
+  private readonly viewToScene = new Float64Array(9);
+  /** The viewport version the mapping was worked out for (it only changes with the window / video). */
+  private mappedVersion = -1;
+  /** This frame's step (s) and base hue — fields, not arguments (no boxed decimals per call). */
+  private frameDt = 1 / 60;
+  private frameHue = 0.5;
   // Scratch.
   private readonly ndc: Vec2 = { x: 0, y: 0 };
+  private readonly view: Vec2 = { x: 0, y: 0 };
   private readonly hit = new THREE.Vector3();
   private readonly plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-  private readonly color = new THREE.Color();
+  private readonly hues = hueTable();
+  private pointAttrs: THREE.BufferAttribute[] = [];
 
   /** What was drawn last frame (tests). */
   pointCount = 0;
@@ -189,6 +218,7 @@ export class StringsMode implements SpatialMode {
 
   enter(ctx: ModeContext): void {
     this.ctx = ctx;
+    this.mappedVersion = -1;
     if (!this.root) this.build(ctx);
     if (this.root) this.root.visible = true;
     this.uiDirty = true;
@@ -200,11 +230,13 @@ export class StringsMode implements SpatialMode {
     if (!ctx || !this.root) return;
     this.now = frame.timestamp;
     const dt = clamp(frame.dt, 0, 0.1);
-    const hue = ((frame.timestamp / 1000) * S.hueSpeed) % 1;
-    for (let h = 0; h < 2; h++) this.readHand(h, frame.hands[SIDES[h] ?? 'left'], dt, hue);
+    this.frameDt = dt;
+    this.frameHue = ((frame.timestamp / 1000) * S.hueSpeed) % 1;
+    this.mapViewToScene(ctx);
+    for (let h = 0; h < 2; h++) this.readHand(h, frame.hands[SIDES[h] ?? 'left']);
 
     this.pointCount = this.writePoints();
-    this.threadSegments = this.writeThreads(dt);
+    this.threadSegments = this.writeThreads();
     this.trailSegments = this.writeTrails();
     this.upload(ctx);
     this.updateStatus(ctx);
@@ -261,9 +293,29 @@ export class StringsMode implements SpatialMode {
     for (const r of this.rings) r.clear();
   }
 
+  /** Where view points land on the z = 0 plane this frame (three reference points). */
+  private mapViewToScene(ctx: ModeContext): void {
+    if (ctx.viewport.version === this.mappedVersion) return;
+    this.mappedVersion = ctx.viewport.version;
+    const m = this.viewToScene;
+    for (let k = 0; k < 3; k++) {
+      this.view.x = k === 1 ? 1 : 0;
+      this.view.y = k === 2 ? 1 : 0;
+      ctx.coords.viewToNdc(this.view, this.ndc);
+      if (!ctx.coords.ndcToPlane(this.ndc, this.plane, this.hit)) return;
+      m[k * 3] = this.hit.x;
+      m[k * 3 + 1] = this.hit.y;
+      m[k * 3 + 2] = this.hit.z;
+    }
+    for (let k = 3; k < 9; k++) m[k] = (m[k] ?? 0) - (m[k % 3] ?? 0); // steps, not points
+  }
+
   /** Joints of one hand in scene units (on the z = 0 plane under the hand), speeds, colours. */
-  private readHand(h: number, hand: TrackedHand | undefined, dt: number, hue: number): void {
+  private readHand(h: number, hand: TrackedHand | undefined): void {
     const ctx = this.ctx;
+    const dt = this.frameDt;
+    const hue = this.frameHue;
+    const m = this.viewToScene;
     if (!ctx || !hand) {
       this.present[h] = this.seen[h] = 0;
       return;
@@ -278,12 +330,9 @@ export class StringsMode implements SpatialMode {
       const lm = hand.landmarks[j];
       const o = (h * J + j) * 3;
       if (lm) {
-        ctx.coords.viewToNdc(lm, this.ndc);
-        if (ctx.coords.ndcToPlane(this.ndc, this.plane, this.hit)) {
-          joints[o] = this.hit.x;
-          joints[o + 1] = this.hit.y;
-          joints[o + 2] = this.hit.z;
-        }
+        joints[o] = (m[0] ?? 0) + lm.x * (m[3] ?? 0) + lm.y * (m[6] ?? 0);
+        joints[o + 1] = (m[1] ?? 0) + lm.x * (m[4] ?? 0) + lm.y * (m[7] ?? 0);
+        joints[o + 2] = (m[2] ?? 0) + lm.x * (m[5] ?? 0) + lm.y * (m[8] ?? 0);
       }
       const i = h * J + j;
       if (fresh || dt <= 0) {
@@ -300,14 +349,11 @@ export class StringsMode implements SpatialMode {
       prev[o + 2] = joints[o + 2] ?? 0;
       const fast = clamp((speed[i] ?? 0) / S.speedFull, 0, 1);
       const bright = (S.brightRest + (S.brightFast - S.brightRest) * fast) * (this.fade[h] ?? 1);
-      this.color.setHSL(
-        (hue + h * S.handHue + fingerOf(j) * S.fingerHue) % 1,
-        S.saturation,
-        S.lightness,
-      );
-      tint[o] = this.color.r * bright;
-      tint[o + 1] = this.color.g * bright;
-      tint[o + 2] = this.color.b * bright;
+      const c =
+        (Math.floor(((hue + h * S.handHue + fingerOf(j) * S.fingerHue) % 1) * HUES) % HUES) * 3;
+      tint[o] = (this.hues[c] ?? 0) * bright;
+      tint[o + 1] = (this.hues[c + 1] ?? 0) * bright;
+      tint[o + 2] = (this.hues[c + 2] ?? 0) * bright;
     }
   }
 
@@ -332,12 +378,12 @@ export class StringsMode implements SpatialMode {
   }
 
   /** Each thread whose two hands are in view: step its spring, write its curve. */
-  private writeThreads(dt: number): number {
+  private writeThreads(): number {
     const layer = this.threadLayer;
     if (!layer) return 0;
     const t = this.threads;
     const { joints, tint, springs } = this;
-    springs.dt = dt;
+    springs.dt = this.frameDt;
     let seg = 0;
     for (let i = 0; i < t.length / 4; i++) {
       const ha = t[i * 4] ?? 0;
@@ -422,8 +468,8 @@ export class StringsMode implements SpatialMode {
     const { pointGeo, pointMat, threadLayer, trailLayer } = this;
     if (!pointGeo || !pointMat || !threadLayer || !trailLayer) return;
     pointGeo.setDrawRange(0, this.pointCount);
-    for (const name of POINT_ATTRIBUTES) {
-      const attr = pointGeo.getAttribute(name);
+    for (let i = 0; i < this.pointAttrs.length; i++) {
+      const attr = this.pointAttrs[i];
       if (attr) attr.needsUpdate = true;
     }
     threadLayer.upload(this.threadSegments);
@@ -471,6 +517,9 @@ export class StringsMode implements SpatialMode {
     pointGeo.setAttribute('tint', new THREE.BufferAttribute(this.pointTint, 3));
     pointGeo.setAttribute('size', new THREE.BufferAttribute(this.pointSize, 1));
     pointGeo.setDrawRange(0, 0);
+    this.pointAttrs = POINT_ATTRIBUTES.map(
+      (n) => pointGeo.getAttribute(n) as THREE.BufferAttribute,
+    );
     const pointMat = new THREE.ShaderMaterial({
       uniforms: { uPixelRatio: { value: 1 } },
       vertexShader: POINT_VERT,

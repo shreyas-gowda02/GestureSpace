@@ -3,17 +3,17 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-27, Phase 9 (Hand Strings)._
+_Last updated: 2026-09-28, Phase 10 (Filter Lab + Portal)._
 
-| Key | Experience          | Status                                                                 |
-| --- | ------------------- | ---------------------------------------------------------------------- |
-| 1   | Voxel Builder       | ✅ Ready (building, depth layers, move / resize / twist, 3D fist turn) |
-| 2   | Spatial Panel       | ✅ Ready (hold, move, resize, rotate; pictures, camera, your own)      |
-| 3   | Air Draw            | ✅ Ready (point to draw, fist eraser)                                  |
-| 4   | Hand Strings        | ✅ Ready (glowing joints, elastic threads, fingertip trails, 3 styles) |
-| 5   | Filter Lab          | 🚧 Placeholder — coming in Phase 10                                    |
-| 6   | Portal / Dimensions | 🚧 Placeholder — coming in Phase 10                                    |
-| 7   | 3D Object Lab       | 🚧 Placeholder — coming in Phase 11                                    |
+| Key | Experience          | Status                                                                  |
+| --- | ------------------- | ----------------------------------------------------------------------- |
+| 1   | Voxel Builder       | ✅ Ready (building, depth layers, move / resize / twist, 3D fist turn)  |
+| 2   | Spatial Panel       | ✅ Ready (hold, move, resize, rotate; pictures, camera, your own)       |
+| 3   | Air Draw            | ✅ Ready (point to draw, fist eraser)                                   |
+| 4   | Hand Strings        | ✅ Ready (glowing joints, elastic threads, fingertip trails, 3 styles)  |
+| 5   | Filter Lab          | ✅ Ready (a lens strip with 13 camera filters; live / frozen / picture) |
+| 6   | Portal / Dimensions | ✅ Ready (a portal into 4 worlds; opens out of a glowing line)          |
+| 7   | 3D Object Lab       | 🚧 Placeholder — coming in Phase 11                                     |
 
 ---
 
@@ -77,19 +77,20 @@ Tips:
 
 ## 3. Keyboard shortcuts (all experiences)
 
-| Key                        | Does                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| **1 – 7**                  | Switch experience (see the table at the top)                                   |
-| **Ctrl+Z**                 | Undo (each experience has its own undo history)                                |
-| **Ctrl+Shift+Z**           | Redo                                                                           |
-| **C**                      | Clear the current experience (undoable; nothing in the Panel; Strings: settle) |
-| **R**                      | Reset view / position of the current experience (Strings: settle the threads)  |
-| **X**                      | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw)                   |
-| **Q / E**                  | Voxel Builder: depth layer − / +                                               |
-| **L**                      | Voxel Builder: Depth Lock on / off                                             |
-| **`** (backtick)           | Debug panel (left of the 1 key)                                                |
-| **Esc**                    | Close panels and drop whatever a hand is holding                               |
-| H, ← / →, [ / ], D, Delete | Reserved for later phases (Help, Filter Lab, 3D Object Lab)                    |
+| Key                    | Does                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| **1 – 7**              | Switch experience (see the table at the top)                                   |
+| **Ctrl+Z**             | Undo (each experience has its own undo history)                                |
+| **Ctrl+Shift+Z**       | Redo                                                                           |
+| **C**                  | Clear the current experience (undoable; nothing in the Panel; Strings: settle) |
+| **R**                  | Reset view / position of the current experience (Strings: settle the threads)  |
+| **X**                  | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw)                   |
+| **Q / E**              | Voxel Builder: depth layer − / +                                               |
+| **L**                  | Voxel Builder: Depth Lock on / off                                             |
+| **`** (backtick)       | Debug panel (left of the 1 key)                                                |
+| **Esc**                | Close panels and drop whatever a hand is holding                               |
+| **← / →** or **[ / ]** | Filter Lab: previous / next filter · Portal: previous / next world             |
+| H, D, Delete           | Reserved for later phases (Help, 3D Object Lab)                                |
 
 Switching experiences keeps what you made in each one, including its undo history. Anything a
 hand is holding at that moment is let go first.
@@ -416,25 +417,132 @@ move. There's nothing to grab: just move your hands and play.
 
 ---
 
-## 8. Experiences still to come (placeholders for now)
+## 8. Filter Lab (key 5)
+
+A "magic lens": a glowing strip you hold between your hands. **Inside it you see the camera picture
+that is behind it, filtered** (thermal, sketch, glitch…); outside it, the normal view. It lines up
+with the picture behind it exactly, however you move, turn or stretch it.
+
+### Holding the lens
+
+1. Put **both hands on the strip** (or just outside its edge). The handles on its short sides
+   brighten.
+2. **Pinch with both hands** to grab it. Then:
+   - **move both hands**: it follows;
+   - **pull them apart**: it gets **wider** (only wider; its height stays the same, like a strip);
+   - **tilt the line between your hands**: it turns.
+3. **Let go** of either pinch to leave it there.
+
+- Width is limited to 0.35× – 3.5× of normal.
+- A one-hand pinch does nothing; a two-hand pinch away from the lens doesn't grab it.
+- If one hand leaves the picture mid-grab, the lens holds still until it's back.
+- **Ctrl+Z** undoes a whole grab. **R** (or **Reset lens**) puts it back in the middle (undoable).
+  **C** does nothing here.
+
+### Changing the filter
+
+| Do this                                                                       | Result          |
+| ----------------------------------------------------------------------------- | --------------- |
+| **Right hand: thumb tip touches little-finger tip**                           | Next filter     |
+| **Left hand: thumb tip touches little-finger tip**                            | Previous filter |
+| **→** or **]** / **←** or **[**                                               | Next / previous |
+| **Next →** / **← Previous** buttons, or click a filter name in the tool panel | Pick one        |
+
+The filter's name pops up above the lens for about 1.5 s. A tap only counts once every 0.4 s, so
+one tap never skips two filters.
+
+The 13 filters, in order: **None** · **Thermal** (heat-camera colours) · **Sketch** (pencil lines on
+paper) · **Pixelate** (big pixels that stay put as the lens moves) · **Glitch** (jumping bands,
+colour fringes, scanlines) · **Red channel** · **Edge** (neon outlines on black) · **Blur** ·
+**Cartoon** (flat colours + ink lines) · **Rainbow** (colours shifting across the lens and over
+time) · **Invert** · **RGB split** (red and blue pulled apart) · **Pop art** (four bold colours).
+It starts on **Thermal**.
+
+### What the lens filters (tool panel)
+
+| Button                       | The lens shows                                                                                        |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Live** (default)           | The live camera behind the lens                                                                       |
+| **Frozen**                   | The camera picture frozen at the moment you press it (press again for a new one; needs the camera on) |
+| **Picture**                  | A sample picture (Aurora), filling the strip                                                          |
+| **Filter your own picture…** | Any picture file from your computer (it never leaves your computer)                                   |
+
+- With **Live** or **Frozen**, what you see in the lens is exactly the camera picture that's behind
+  it, so moving the lens is like sliding a magic glass over the world.
+- **Settings → Quality: Low** (Phase 12) will use a lighter Blur.
+
+### Status messages
+
+| Message                                                            | Meaning                            |
+| ------------------------------------------------------------------ | ---------------------------------- |
+| Thermal lens — thumb touches pinky (or ← / →) to change the filter | Ready (shows the current filter)   |
+| Both hands on the lens — pinch to grab it                          | Both hands in reach                |
+| Thermal — move, turn, spread to widen; let go to drop it           | Held                               |
+| Pinch on the lens (or its glowing edges) to grab it                | Both hands pinched, but not on it  |
+| Hand lost — the lens holds still until it is back                  | A hand left mid-grab               |
+| Start the camera first                                             | Frozen pressed with the camera off |
+
+---
+
+## 9. Portal / Dimensions (key 6)
+
+An oval window into another world, with a rim of flowing violet energy.
+
+### Opening it
+
+- The portal **starts shut, as a glowing line** in the middle ("Shut — pinch both ends of the
+  glowing line to open it").
+- Put your hands at **both ends of the line** and **pinch with both hands**: the portal **opens
+  out of the line** (≈ 0.7 s).
+- **R** (or **Reset portal**) puts it back in the middle **and shuts it again**, so you can open it
+  again.
+
+### Holding it
+
+Once open, it's held like the Spatial Panel: **pinch with both hands** on it (or its rim), then
+move, spread (bigger / smaller, 0.35× – 3×) or tilt your hands (turn it); let go to leave it.
+**Ctrl+Z** undoes a whole grab. A lost hand freezes it until it's back.
+
+### Worlds
+
+| World                | What you see                                                                                                                            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nebula** (default) | Swirling purple and turquoise clouds with twinkling stars                                                                               |
+| **Other World**      | A 3D world of floating crystals, a planet and stars. **Move the portal and your view of it swings**, like looking through a real window |
+| **Inverted Reality** | The camera behind the portal, inverted into purple / cyan, with ripples                                                                 |
+| **Picture**          | The Synthwave sample picture                                                                                                            |
+
+Switch with the tool panel buttons, **← / →** (or **[ / ]**), or a **thumb-to-little-finger tap**
+(right hand = next, left hand = previous).
+
+### Status messages
+
+| Message                                                              | Meaning                         |
+| -------------------------------------------------------------------- | ------------------------------- |
+| Pinch both ends of the glowing line to open a portal                 | Shut                            |
+| Both hands on the line — pinch to open the portal                    | Both hands in reach of the line |
+| Opening… Nebula                                                      | Opening                         |
+| Nebula — move, spread or tilt your hands; let go to leave it there   | Held                            |
+| Nebula — ← / → or thumb touches pinky for another world · R shuts it | Open, not held                  |
+| Pinch on the portal (or its rim) to grab it                          | Both hands pinched, not on it   |
+| Hand lost — the portal holds still until it is back                  | A hand left mid-grab            |
+
+---
+
+## 10. Experiences still to come (placeholders for now)
 
 Each unbuilt experience currently shows a **spinning shape**. Point at it (your cursor ring turns
 white) and **pinch to grab and drag it**; let go to drop it. This checks the hand controls work
 before the real experience arrives. Planned controls (subject to change; this file will be updated
 when each is built):
 
-- **5 · Filter Lab (Phase 10):** a "magic lens" strip that filters the camera behind it (thermal,
-  sketch, glitch…). Grab it with a two-hand pinch; thumb-pinky tap with the right hand for the next
-  filter, the left hand for the previous one; ← / → or [ / ] also switch filters.
-- **6 · Portal (Phase 10):** open a window into another world with a two-hand pinch; move,
-  stretch and rotate it.
 - **7 · 3D Object Lab (Phase 11):** hold an open palm for a spawn menu (cube, sphere, cylinder,
   plane, torus), point + pinch to select, pinch + drag to move, two hands to rotate / scale,
   D to duplicate, Delete to delete.
 
 ---
 
-## 9. Debug panel and recordings
+## 11. Debug panel and recordings
 
 Press **`** (backtick) or click **Debug**.
 
@@ -450,7 +558,7 @@ Press **`** (backtick) or click **Debug**.
 
 ---
 
-## 10. Troubleshooting
+## 12. Troubleshooting
 
 | Problem                                       | Try                                                                                                                         |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -466,6 +574,10 @@ Press **`** (backtick) or click **Debug**.
 
 ## Changelog of controls
 
+- **2026-09-28** — **Filter Lab built** (a lens strip over the camera, 13 filters, thumb-pinky /
+  arrow keys / buttons, live / frozen / picture / your own picture, width-only stretch) and
+  **Portal built** (opens out of a glowing line; Nebula, Other World, Inverted Reality, Picture;
+  R shuts it). ← / → and [ / ] now switch filters and worlds.
 - **2026-09-27** — **Hand Strings built**: glowing joints, elastic threads (Skeleton / Web / Full
   mesh), fingertip trails (Off / Short / Long), faster = brighter, Settle (R / C).
 - **2026-09-27** — **Spatial Panel built**: hold a picture with both hands (move, resize, rotate),

@@ -5,8 +5,11 @@
 import { useRef } from 'react';
 import { modeAction, resetView } from '@/app/bootstrap';
 import { TUNING } from '@/config/tuning';
+import { FILTER_PRESETS } from '@/modes/filter/filters';
+import { PORTAL_WORLDS } from '@/modes/portal/portalContent';
 import type {
   DrawTool,
+  FilterSource,
   ModeId,
   PanelContent,
   StringsStyle,
@@ -356,6 +359,134 @@ function StringsTools() {
   );
 }
 
+const FILTER_SOURCES: readonly { source: Exclude<FilterSource, 'file'>; label: string }[] = [
+  { source: 'lens', label: 'Live' },
+  { source: 'frozen', label: 'Frozen' },
+  { source: 'picture', label: 'Picture' },
+];
+
+function FilterTools() {
+  const ui = useAppStore((s) => s.modeUi.filter);
+  const cameraOn = useAppStore((s) => s.cameraStatus === 'running');
+  const fileRef = useRef<HTMLInputElement>(null);
+  if (!ui) return null;
+
+  return (
+    <>
+      <h3 className="gs-toolpanel__sub">
+        Filter <kbd>←</kbd> <kbd>→</kbd>
+      </h3>
+      <div className="gs-segmented" role="group" aria-label="Previous or next filter">
+        <button type="button" className="gs-btn" onClick={() => modeAction({ type: 'filterPrev' })}>
+          ← Previous
+        </button>
+        <button type="button" className="gs-btn" onClick={() => modeAction({ type: 'filterNext' })}>
+          Next →
+        </button>
+      </div>
+      <div className="gs-choices" role="group" aria-label="Filters">
+        {FILTER_PRESETS.map(({ id, name }) => (
+          <button
+            key={id}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.preset === id}
+            onClick={() => modeAction({ type: 'filterPreset', preset: id })}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">The lens shows</h3>
+      <div className="gs-segmented" role="group" aria-label="Lens source">
+        {FILTER_SOURCES.map(({ source, label }) => (
+          <button
+            key={source}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.source === source}
+            disabled={source === 'frozen' && !cameraOn}
+            title={
+              source === 'frozen'
+                ? 'Freeze the camera picture (press again for a new one)'
+                : undefined
+            }
+            onClick={() => modeAction({ type: 'filterSource', source })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="gs-btn gs-depthlock"
+        aria-pressed={ui.source === 'file'}
+        onClick={() => fileRef.current?.click()}
+      >
+        {ui.fileName ? `Your picture: ${ui.fileName}` : 'Filter your own picture…'}
+      </button>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        aria-label="Filter your own picture"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file?.type.startsWith('image/')) {
+            modeAction({ type: 'filterFile', url: URL.createObjectURL(file), name: file.name });
+          }
+          e.target.value = '';
+        }}
+      />
+
+      <button type="button" className="gs-btn gs-depthlock" onClick={() => resetView()}>
+        Reset lens <kbd>R</kbd>
+      </button>
+      <p className="gs-muted gs-toolpanel__count">
+        {ui.held ? 'Held with both hands' : 'Pinch it with both hands to grab it'}
+      </p>
+    </>
+  );
+}
+
+function PortalTools() {
+  const ui = useAppStore((s) => s.modeUi.portal);
+  if (!ui) return null;
+
+  return (
+    <>
+      <h3 className="gs-toolpanel__sub">
+        World <kbd>←</kbd> <kbd>→</kbd>
+      </h3>
+      <div className="gs-choices" role="group" aria-label="Portal world">
+        {PORTAL_WORLDS.map(({ id, name }) => (
+          <button
+            key={id}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.world === id}
+            onClick={() => modeAction({ type: 'portalWorld', world: id })}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="gs-btn gs-depthlock" onClick={() => resetView()}>
+        Reset portal <kbd>R</kbd>
+      </button>
+      <p className="gs-muted gs-toolpanel__count">
+        {!ui.open
+          ? 'Shut — pinch both ends of the glowing line to open it'
+          : ui.held
+            ? 'Held with both hands'
+            : 'Open — pinch it with both hands to move it'}
+      </p>
+    </>
+  );
+}
+
 /** The active experience's controls (nothing for experiences still shown as placeholders). */
 export function ModeTools({ mode }: { mode: ModeId }) {
   switch (mode) {
@@ -365,6 +496,10 @@ export function ModeTools({ mode }: { mode: ModeId }) {
       return <PanelTools />;
     case 'strings':
       return <StringsTools />;
+    case 'filter':
+      return <FilterTools />;
+    case 'portal':
+      return <PortalTools />;
     case 'draw':
       return <DrawTools />;
     default:

@@ -8,7 +8,10 @@ import type {
   InteractionFrame,
   ModeId,
   ModeUiStates,
+  FilterPreset,
+  FilterSource,
   PanelContent,
+  PortalWorld,
   Settings,
   StringsStyle,
   TrailLength,
@@ -55,7 +58,12 @@ export type ToolAction =
   /** The user's own picture: an object URL the panel takes ownership of (and revokes). */
   | { type: 'panelFile'; url: string; name: string }
   | { type: 'stringsStyle'; style: StringsStyle }
-  | { type: 'stringsTrails'; trails: TrailLength };
+  | { type: 'stringsTrails'; trails: TrailLength }
+  | { type: 'filterPreset'; preset: FilterPreset }
+  /** 'frozen' takes a new camera snapshot each time. */
+  | { type: 'filterSource'; source: Exclude<FilterSource, 'file'> }
+  | { type: 'filterFile'; url: string; name: string }
+  | { type: 'portalWorld'; world: PortalWorld };
 
 export type ModeAction = KeyAction | ToolAction;
 

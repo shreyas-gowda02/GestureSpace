@@ -206,3 +206,61 @@ test('hand strings: thread styles and trails switch without errors', async ({ pa
   await page.getByRole('button', { name: /Settle the threads/ }).click();
   expect(errors).toEqual([]);
 });
+
+/** Collects page errors; opens the app with the (fake) camera on. */
+async function openWithCamera(page: Page): Promise<string[]> {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Enable camera' }).click();
+  await expect(page.getByText('Camera on')).toBeVisible();
+  return errors;
+}
+
+// The lens / portal shaders are heavy for the headless browser's software GPU (frames are slow,
+// and every click waits for frames), so these two get more time than the 30 s default.
+test('filter lab: every filter and source switches without errors', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = await openWithCamera(page);
+  const pressed = (name: string) =>
+    expect(page.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+  await page.keyboard.press('5');
+  await pressed('Thermal');
+  for (const name of ['None', 'Sketch', 'Pixelate', 'Glitch', 'Red channel', 'Edge', 'Blur']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await pressed(name);
+  }
+  for (const name of ['Cartoon', 'Rainbow', 'Invert', 'RGB split', 'Pop art']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await pressed(name);
+  }
+  await page.keyboard.press('ArrowRight'); // Pop art → None
+  await pressed('None');
+  await page.getByRole('button', { name: 'Frozen', exact: true }).click();
+  await pressed('Frozen');
+  await page.getByRole('button', { name: 'Picture', exact: true }).click();
+  await pressed('Picture');
+  await page.getByRole('button', { name: 'Live', exact: true }).click();
+  await pressed('Live');
+  expect(errors).toEqual([]);
+});
+
+test('portal: every world switches without errors; Reset shuts it', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = await openWithCamera(page);
+  const pressed = (name: string) =>
+    expect(page.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('6');
+  await pressed('Nebula');
+  await expect(page.getByText(/Shut — pinch both ends/)).toBeVisible();
+  for (const name of ['Other World', 'Inverted Reality', 'Picture']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await pressed(name);
+  }
+  await page.getByRole('button', { name: /Reset portal/ }).click();
+  expect(errors).toEqual([]);
+});

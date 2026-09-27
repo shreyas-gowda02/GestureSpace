@@ -464,6 +464,42 @@ export const TUNING = {
     uiHz: 10,
   },
 
+  /** Filter Lab (§18): the lens strip. Sizes in scene units. */
+  filter: {
+    /** Strip shape (width / height) and width at rest (≈ 33% of the view width). */
+    aspect: 2.8,
+    size: 11,
+    restY: 0.4,
+    /** Width-only stretch limits (× the resting width). */
+    widthRange: { min: 0.35, max: 3.5 },
+    /** Both pinches on the strip or within this far of its edge grab it (like the panel). */
+    captureMargin: 1.5,
+    accent: '#ffb62e',
+    /** Sample picture used for the "Picture" source. */
+    picture: 'textures/aurora.svg',
+    uiHz: 10,
+  },
+
+  /** Portal (§19). Sizes in scene units. */
+  portal: {
+    /** Oval shape (width / height) and width at rest. */
+    aspect: 1.25,
+    size: 9,
+    restY: 0.6,
+    scaleRange: { min: 0.35, max: 3 },
+    captureMargin: 1.8,
+    accent: '#b36bff',
+    /** Opening: from a line to fully open over this long, eased. */
+    openMs: 700,
+    /** Picture world. */
+    picture: 'textures/synthwave.svg',
+    /** Other World render target: longer side in px by quality (Low / Medium / High). */
+    worldSize: { low: 384, medium: 640, high: 960 },
+    /** How far the other world's camera swings as the portal moves (scene units per view width). */
+    parallax: 6,
+    uiHz: 10,
+  },
+
   history: {
     cap: 200,
   },

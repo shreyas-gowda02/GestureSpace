@@ -194,8 +194,9 @@ describe('TextureSurface (§17)', () => {
     expect(s.within(ray, 0, out)).toBe(true);
     const outside = s.object.localToWorld(new THREE.Vector3(0.5 * 12 + 1, 0, 0));
     const ray2 = new THREE.Ray(origin, outside.clone().sub(origin).normalize());
-    expect(s.within(ray2, 0.5, out)).toBe(false);
-    expect(s.within(ray2, 1.5, out)).toBe(true);
+    // 1 unit past the edge at scale 1.7 = 1.7 scene units: the margin is in scene units.
+    expect(s.within(ray2, 1.5, out)).toBe(false);
+    expect(s.within(ray2, 1.9, out)).toBe(true);
     s.dispose();
   });
 

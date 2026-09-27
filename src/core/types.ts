@@ -199,10 +199,47 @@ export interface StringsUiState {
   trails: TrailLength;
 }
 
+/** Filter Lab lens presets (§18.3), in their cycling order. */
+export type FilterPreset =
+  | 'none'
+  | 'thermal'
+  | 'sketch'
+  | 'pixelate'
+  | 'glitch'
+  | 'red'
+  | 'edge'
+  | 'blur'
+  | 'cartoon'
+  | 'rainbow'
+  | 'invert'
+  | 'rgbSplit'
+  | 'popArt';
+/** What the lens filters: the live camera behind it, a frozen camera frame, or a picture. */
+export type FilterSource = 'lens' | 'frozen' | 'picture' | 'file';
+
+export interface FilterUiState {
+  preset: FilterPreset;
+  source: FilterSource;
+  fileName: string | null;
+  held: boolean;
+}
+
+/** Portal worlds (§19). */
+export type PortalWorld = 'nebula' | 'otherWorld' | 'inverted' | 'picture';
+
+export interface PortalUiState {
+  world: PortalWorld;
+  /** Opened (it starts shut, as a glowing line). */
+  open: boolean;
+  held: boolean;
+}
+
 /** Per experience: what its tool panel shows. Grows as experiences land. */
 export interface ModeUiStates {
   voxel: VoxelUiState;
   panel: PanelUiState;
   draw: DrawUiState;
   strings: StringsUiState;
+  filter: FilterUiState;
+  portal: PortalUiState;
 }

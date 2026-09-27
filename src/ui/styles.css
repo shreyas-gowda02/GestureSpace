@@ -716,6 +716,18 @@ kbd {
   font-size: 13px;
 }
 
+/* A wrapping grid of choices (Filter Lab's 13 presets, Portal worlds). */
+.gs-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+}
+
+.gs-choices .gs-btn {
+  padding: 0 6px;
+  font-size: 13px;
+}
+
 .gs-swatches {
   display: grid;
   grid-template-columns: repeat(8, 1fr);

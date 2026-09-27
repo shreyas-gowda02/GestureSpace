@@ -230,43 +230,55 @@ describe('StringsMode', () => {
 });
 
 describe('StringsMode allocates nothing per frame (heap sampling, real hand pipeline)', () => {
-  // V8's sampling heap profiler attributes every allocation to the function that made it. The
-  // Strings code creates no objects per frame; what can still show up is the engine boxing a few
-  // numbers while it re-optimises a function once (seen: 0–26 KB in a run, never per frame). One
-  // object per frame would already be ≥ 72 KB over these ~3,000 frames, so the budget catches it.
+  // V8's sampling heap profiler, told to keep objects that were already garbage-collected (by
+  // default it reports only survivors, which hides per-frame garbage), attributes each allocation
+  // to a call stack. Counted: everything allocated while Strings code is on the stack, including
+  // library calls it makes (a `new THREE.Vector3()` is charged to three.js's constructor). The
+  // engine can still box a few numbers while it re-optimises a function once (seen: 2–9 B / frame
+  // in one window), so two windows are measured and the lower counts: a real per-frame
+  // allocation is in both (one small object per frame ≈ 16–48 B / frame), a one-off blip isn't.
   const BUDGET_PER_FRAME = 13; // bytes
 
-  it('3,000 frames of two waving hands: under 13 bytes per frame inside the Strings code', async () => {
+  it('3,000 frames of two waving hands: under 13 bytes per frame from the Strings code', async () => {
     const app = pipelineRig('strings');
     const mode = app.mc.activeMode as StringsMode;
     app.mc.handleAction({ type: 'stringsStyle', style: 'mesh' });
     app.mc.handleAction({ type: 'stringsTrails', trails: 'long' });
     for (let i = 0; i < 6; i++) app.play(waveScenario()); // warm up: let the JIT optimise first
-    let frames = 0;
     const session = new Session();
     session.connect();
     await session.post('HeapProfiler.enable');
-    await session.post('HeapProfiler.startSampling', { samplingInterval: 128 });
-    for (let i = 0; i < 12; i++) app.play(waveScenario(), () => frames++); // 12 × 4.3 s
-    const { profile } = await session.post('HeapProfiler.stopSampling');
+
+    const measure = async (): Promise<{ perFrame: number; detail: string }> => {
+      let frames = 0;
+      await session.post('HeapProfiler.startSampling', {
+        samplingInterval: 128,
+        includeObjectsCollectedByMajorGC: true,
+        includeObjectsCollectedByMinorGC: true,
+      });
+      for (let i = 0; i < 12; i++) app.play(waveScenario(), () => frames++); // 12 × 4.3 s
+      const { profile } = await session.post('HeapProfiler.stopSampling');
+      expect(frames).toBeGreaterThan(3000);
+      type Node = typeof profile.head;
+      const ours: string[] = [];
+      let bytes = 0;
+      const walk = (n: Node, inside: boolean): void => {
+        const here = inside || /modes\/strings\//.test(n.callFrame.url);
+        if (here && n.selfSize > 0) {
+          ours.push(`${n.callFrame.functionName || '(anonymous)'} ${n.selfSize} B`);
+          bytes += n.selfSize;
+        }
+        for (const c of n.children) walk(c, here);
+      };
+      walk(profile.head, false);
+      return { perFrame: bytes / frames, detail: ours.join(', ') };
+    };
+
+    const first = await measure();
+    const second = await measure();
     session.disconnect();
     expect(mode.threadSegments).toBeGreaterThan(0);
-    expect(frames).toBeGreaterThan(3000);
-
-    // Allocations made by the Strings code itself: object / array literals, typed arrays, closures,
-    // boxed numbers. (A library constructor it calls, e.g. `new THREE.Vector3()`, is charged to
-    // the library and lost in three.js's own warm-up noise — keep `new` out of per-frame code.)
-    type Node = typeof profile.head;
-    const ours: string[] = [];
-    let bytes = 0;
-    const walk = (n: Node): void => {
-      if (n.selfSize > 0 && /modes\/strings\//.test(n.callFrame.url)) {
-        ours.push(`${n.callFrame.functionName || '(anonymous)'} ${n.selfSize} B`);
-        bytes += n.selfSize;
-      }
-      for (const c of n.children) walk(c);
-    };
-    walk(profile.head);
-    expect(bytes / frames, ours.join(', ')).toBeLessThan(BUDGET_PER_FRAME);
+    const best = first.perFrame <= second.perFrame ? first : second;
+    expect(best.perFrame, `${first.detail} | ${second.detail}`).toBeLessThan(BUDGET_PER_FRAME);
   });
 });

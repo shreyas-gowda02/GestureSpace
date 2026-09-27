@@ -4,7 +4,9 @@
 import { MODE_IDS, type ModeId } from '@/core/types';
 import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
 import { DrawMode } from './draw/DrawMode';
+import { FilterLabMode } from './filter/FilterLabMode';
 import { PanelMode } from './panel/PanelMode';
+import { PortalMode } from './portal/PortalMode';
 import { StringsMode } from './strings/StringsMode';
 import type { ModeFactory } from './types';
 import { VoxelMode } from './voxel/VoxelMode';
@@ -112,9 +114,14 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     tagline: 'A magic lens that filters the world behind it.',
     phase: 10,
     help: [
-      { gesture: 'Two-hand pinch', action: 'Capture / move / stretch / rotate the lens' },
-      { gesture: 'Thumb-pinky tap (dominant)', action: 'Next filter' },
-      { gesture: 'Thumb-pinky tap (other hand)', action: 'Previous filter' },
+      { gesture: 'Both hands pinch on the lens', action: 'Grab it (edge handles glow in reach)' },
+      { gesture: 'Move / tilt both hands', action: 'Move / turn it' },
+      { gesture: 'Spread / close hands', action: 'Wider / narrower' },
+      { gesture: 'Thumb touches pinky (right hand)', action: 'Next filter' },
+      { gesture: 'Thumb touches pinky (left hand)', action: 'Previous filter' },
+      { gesture: '← / → or [ / ]', action: 'Previous / next filter' },
+      { gesture: 'Tool panel', action: '13 filters · live / frozen / picture' },
+      { gesture: 'R', action: 'Reset the lens' },
     ],
   },
   portal: {
@@ -124,7 +131,13 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     hotkey: '6',
     tagline: 'Open a window into another world.',
     phase: 10,
-    help: [{ gesture: 'Two-hand pinch', action: 'Open / move / stretch / rotate the portal' }],
+    help: [
+      { gesture: 'Both hands pinch the glowing line', action: 'Open the portal' },
+      { gesture: 'Both hands pinch on the portal', action: 'Grab it: move / resize / turn' },
+      { gesture: '← / → or thumb touches pinky', action: 'Another world' },
+      { gesture: 'Tool panel', action: 'Nebula · Other World · Inverted Reality · Picture' },
+      { gesture: 'R', action: 'Reset: back to the middle, shut' },
+    ],
   },
   objectLab: {
     id: 'objectLab',
@@ -150,19 +163,16 @@ export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>([
   'panel',
   'draw',
   'strings',
+  'filter',
+  'portal',
 ]);
 
 /** Placeholder look per experience until its real implementation lands. */
-const PLACEHOLDERS: Record<
-  Exclude<ModeId, 'voxel' | 'panel' | 'draw' | 'strings'>,
-  { shape: PlaceholderShape; color: string }
-> = {
-  filter: { shape: 'cylinder', color: '#ffb62e' },
-  portal: { shape: 'torus', color: '#b36bff' },
+const PLACEHOLDERS: Record<'objectLab', { shape: PlaceholderShape; color: string }> = {
   objectLab: { shape: 'octahedron', color: '#ff7a59' },
 };
 
-function placeholder(id: Exclude<ModeId, 'voxel' | 'panel' | 'draw' | 'strings'>): ModeFactory {
+function placeholder(id: 'objectLab'): ModeFactory {
   const meta = MODE_META[id];
   return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
 }
@@ -172,7 +182,7 @@ export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
   panel: () => new PanelMode(),
   draw: () => new DrawMode(),
   strings: () => new StringsMode(),
-  filter: placeholder('filter'),
-  portal: placeholder('portal'),
+  filter: () => new FilterLabMode(),
+  portal: () => new PortalMode(),
   objectLab: placeholder('objectLab'),
 };

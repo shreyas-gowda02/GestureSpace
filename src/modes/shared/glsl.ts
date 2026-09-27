@@ -62,3 +62,28 @@ void main() {
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }
 `;
+
+/**
+ * Keeps a lens shader's cover uniforms in step with the viewport and the drawing-buffer size,
+ * touching them only when either changed (cheap to call every frame).
+ */
+export class CoverSync {
+  private version = -1;
+  private readonly buffer = new THREE.Vector2();
+  private readonly synced = new THREE.Vector2();
+
+  update(u: CoverUniforms, viewport: ViewportMapper, renderer: THREE.WebGLRenderer): void {
+    if (typeof renderer.getDrawingBufferSize === 'function')
+      renderer.getDrawingBufferSize(this.buffer);
+    else this.buffer.set(viewport.viewWidth, viewport.viewHeight); // tests: no real renderer
+    if (viewport.version === this.version && this.buffer.equals(this.synced)) return;
+    syncCoverUniforms(u, viewport, this.buffer);
+    this.version = viewport.version;
+    this.synced.copy(this.buffer);
+  }
+
+  /** Force a re-sync next time (e.g. after re-entering the experience). */
+  invalidate(): void {
+    this.version = -1;
+  }
+}
