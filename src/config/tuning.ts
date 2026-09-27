@@ -420,6 +420,50 @@ export const TUNING = {
     uiHz: 10,
   },
 
+  /** Hand Strings (§16). Distances in scene units (the view is ≈ 18.6 units tall at z = 0). */
+  strings: {
+    /** Each thread is a curve through a spring-damper midpoint, drawn as this many segments. */
+    segments: 10,
+    /** Midpoint spring: stiffness (1/s²) and damping (1/s) → ≈ 1.5 Hz, a few soft wobbles. */
+    stiffness: 90,
+    damping: 6,
+    /** Threads hang down by this fraction of their length at rest. */
+    sag: 0.12,
+    /** The midpoint never strays further than this fraction of the thread's length. */
+    maxStretch: 0.8,
+    /** Longest physics step (s); longer frames are split. */
+    maxStep: 1 / 60,
+    /** Joint speed (units/s) that counts as "fast": full brightness and size. */
+    speedFull: 20,
+    /** Speed low-pass (Hz), so a jittery joint doesn't flicker. */
+    speedCutoff: 6,
+    /** Joint glow size in CSS px: resting, extra when fast; fingertips × tipScale. */
+    pointSize: 16,
+    pointSizeFast: 14,
+    tipScale: 1.35,
+    /** Brightness: resting → fast. */
+    brightRest: 0.45,
+    brightFast: 1,
+    /** Line widths in CSS px (a soft wide glow under a thin bright core) and their opacity. */
+    glowWidth: 8,
+    glowOpacity: 0.16,
+    coreWidth: 2.2,
+    coreOpacity: 1,
+    /** Fingertip trails: width (CSS px) and opacity (additive, so they fade to nothing). */
+    trailWidth: 3,
+    trailOpacity: 0.9,
+    /** Colour: hue turns this many cycles per second; hands and fingers are offset around it. */
+    hueSpeed: 0.03,
+    handHue: 0.45,
+    fingerHue: 0.07,
+    saturation: 1,
+    lightness: 0.55,
+    /** Fingertip trails: samples kept per tip, one sample at most every stepMs, lifetime by length. */
+    trail: { samples: 48, stepMs: 15, shortMs: 300, longMs: 750 },
+    /** Tool-panel updates are published at most this often. */
+    uiHz: 10,
+  },
+
   history: {
     cap: 200,
   },

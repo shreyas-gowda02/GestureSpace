@@ -5,6 +5,7 @@ import { MODE_IDS, type ModeId } from '@/core/types';
 import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
 import { DrawMode } from './draw/DrawMode';
 import { PanelMode } from './panel/PanelMode';
+import { StringsMode } from './strings/StringsMode';
 import type { ModeFactory } from './types';
 import { VoxelMode } from './voxel/VoxelMode';
 
@@ -95,7 +96,13 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     hotkey: '4',
     tagline: 'Glowing particles and elastic threads on your hands.',
     phase: 9,
-    help: [{ gesture: 'Move your hands', action: 'Stretch the string network' }],
+    help: [
+      { gesture: 'Move your hands', action: 'Glowing threads stretch, sag and wobble' },
+      { gesture: 'Move faster', action: 'Brighter, bigger sparks' },
+      { gesture: 'Both hands in view', action: 'Web / Full mesh link fingertips across' },
+      { gesture: 'Tool panel', action: 'Threads: Skeleton / Web / Full mesh · Trails' },
+      { gesture: 'R or C', action: 'Let every thread settle, clear trails' },
+    ],
   },
   filter: {
     id: 'filter',
@@ -138,20 +145,24 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
 export const MODE_LIST: readonly ModeMeta[] = MODE_IDS.map((id) => MODE_META[id]);
 
 /** Experiences that are fully built (the rest still run as PlaceholderMode). */
-export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>(['voxel', 'panel', 'draw']);
+export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>([
+  'voxel',
+  'panel',
+  'draw',
+  'strings',
+]);
 
 /** Placeholder look per experience until its real implementation lands. */
 const PLACEHOLDERS: Record<
-  Exclude<ModeId, 'voxel' | 'panel' | 'draw'>,
+  Exclude<ModeId, 'voxel' | 'panel' | 'draw' | 'strings'>,
   { shape: PlaceholderShape; color: string }
 > = {
-  strings: { shape: 'icosahedron', color: '#a6ff3d' },
   filter: { shape: 'cylinder', color: '#ffb62e' },
   portal: { shape: 'torus', color: '#b36bff' },
   objectLab: { shape: 'octahedron', color: '#ff7a59' },
 };
 
-function placeholder(id: Exclude<ModeId, 'voxel' | 'panel' | 'draw'>): ModeFactory {
+function placeholder(id: Exclude<ModeId, 'voxel' | 'panel' | 'draw' | 'strings'>): ModeFactory {
   const meta = MODE_META[id];
   return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
 }
@@ -160,7 +171,7 @@ export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
   voxel: () => new VoxelMode(),
   panel: () => new PanelMode(),
   draw: () => new DrawMode(),
-  strings: placeholder('strings'),
+  strings: () => new StringsMode(),
   filter: placeholder('filter'),
   portal: placeholder('portal'),
   objectLab: placeholder('objectLab'),

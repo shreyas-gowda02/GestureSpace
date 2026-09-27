@@ -180,3 +180,29 @@ test('spatial panel: pictures, camera snapshot, live camera and your own picture
   await pressed('Synthwave');
   expect(errors).toEqual([]);
 });
+
+test('hand strings: thread styles and trails switch without errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  await openApp(page);
+  await page.getByRole('button', { name: 'Enable camera' }).click();
+  await expect(page.getByText('Camera on')).toBeVisible();
+  await page.keyboard.press('4');
+  const pressed = (name: string) =>
+    expect(page.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await pressed('Web');
+  await pressed('Short');
+  for (const name of ['Full mesh', 'Skeleton', 'Web']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await pressed(name);
+  }
+  for (const name of ['Long', 'Off', 'Short']) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await pressed(name);
+  }
+  await page.getByRole('button', { name: /Settle the threads/ }).click();
+  expect(errors).toEqual([]);
+});

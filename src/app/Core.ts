@@ -459,25 +459,30 @@ export class Core {
   private renderFrame(): void {
     this.modes.render();
     const cam = this.sceneManager.camera;
+    // An experience that draws the hands itself (Hand Strings) gets a clean stage.
+    const ownHands = this.modes.activeMode?.drawsHands === true;
     for (const side of SIDES) {
-      this.markers[side].update(this.cursors.cursors[side], this.gestures[side]?.pinch.phase, cam);
+      const cursor = ownHands ? undefined : this.cursors.cursors[side];
+      this.markers[side].update(cursor, this.gestures[side]?.pinch.phase, cam);
     }
     this.sceneManager.render();
 
     const ov = this.overlay;
     ov.clear();
-    if (this.settings.showSkeleton) {
+    if (this.settings.showSkeleton && !ownHands) {
       const { left, right } = this.hands;
       if (left) drawHandSkeleton(ov.ctx, left, this.viewport);
       if (right) drawHandSkeleton(ov.ctx, right, this.viewport);
     }
-    drawGestureIndicators(
-      ov.ctx,
-      this.hands,
-      this.gestures,
-      this.gestureEngine.bothHandsVisible,
-      this.viewport,
-    );
+    if (!ownHands) {
+      drawGestureIndicators(
+        ov.ctx,
+        this.hands,
+        this.gestures,
+        this.gestureEngine.bothHandsVisible,
+        this.viewport,
+      );
+    }
     this.modes.drawOverlay(ov.ctx);
   }
 

@@ -190,9 +190,19 @@ export interface PanelUiState {
   held: boolean;
 }
 
+/** Hand Strings: which threads are drawn, and how long fingertip trails last. */
+export type StringsStyle = 'skeleton' | 'web' | 'mesh';
+export type TrailLength = 'off' | 'short' | 'long';
+
+export interface StringsUiState {
+  style: StringsStyle;
+  trails: TrailLength;
+}
+
 /** Per experience: what its tool panel shows. Grows as experiences land. */
 export interface ModeUiStates {
   voxel: VoxelUiState;
   panel: PanelUiState;
   draw: DrawUiState;
+  strings: StringsUiState;
 }

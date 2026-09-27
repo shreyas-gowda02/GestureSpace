@@ -3,14 +3,14 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-27, Phase 7 (Spatial Panel)._
+_Last updated: 2026-09-27, Phase 9 (Hand Strings)._
 
 | Key | Experience          | Status                                                                 |
 | --- | ------------------- | ---------------------------------------------------------------------- |
 | 1   | Voxel Builder       | ✅ Ready (building, depth layers, move / resize / twist, 3D fist turn) |
 | 2   | Spatial Panel       | ✅ Ready (hold, move, resize, rotate; pictures, camera, your own)      |
 | 3   | Air Draw            | ✅ Ready (point to draw, fist eraser)                                  |
-| 4   | Hand Strings        | 🚧 Placeholder — coming in Phase 9                                     |
+| 4   | Hand Strings        | ✅ Ready (glowing joints, elastic threads, fingertip trails, 3 styles) |
 | 5   | Filter Lab          | 🚧 Placeholder — coming in Phase 10                                    |
 | 6   | Portal / Dimensions | 🚧 Placeholder — coming in Phase 10                                    |
 | 7   | 3D Object Lab       | 🚧 Placeholder — coming in Phase 11                                    |
@@ -77,19 +77,19 @@ Tips:
 
 ## 3. Keyboard shortcuts (all experiences)
 
-| Key                        | Does                                                          |
-| -------------------------- | ------------------------------------------------------------- |
-| **1 – 7**                  | Switch experience (see the table at the top)                  |
-| **Ctrl+Z**                 | Undo (each experience has its own undo history)               |
-| **Ctrl+Shift+Z**           | Redo                                                          |
-| **C**                      | Clear the current experience (undoable; nothing in the Panel) |
-| **R**                      | Reset view / position of the current experience               |
-| **X**                      | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw)  |
-| **Q / E**                  | Voxel Builder: depth layer − / +                              |
-| **L**                      | Voxel Builder: Depth Lock on / off                            |
-| **`** (backtick)           | Debug panel (left of the 1 key)                               |
-| **Esc**                    | Close panels and drop whatever a hand is holding              |
-| H, ← / →, [ / ], D, Delete | Reserved for later phases (Help, Filter Lab, 3D Object Lab)   |
+| Key                        | Does                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| **1 – 7**                  | Switch experience (see the table at the top)                                   |
+| **Ctrl+Z**                 | Undo (each experience has its own undo history)                                |
+| **Ctrl+Shift+Z**           | Redo                                                                           |
+| **C**                      | Clear the current experience (undoable; nothing in the Panel; Strings: settle) |
+| **R**                      | Reset view / position of the current experience (Strings: settle the threads)  |
+| **X**                      | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw)                   |
+| **Q / E**                  | Voxel Builder: depth layer − / +                                               |
+| **L**                      | Voxel Builder: Depth Lock on / off                                             |
+| **`** (backtick)           | Debug panel (left of the 1 key)                                                |
+| **Esc**                    | Close panels and drop whatever a hand is holding                               |
+| H, ← / →, [ / ], D, Delete | Reserved for later phases (Help, Filter Lab, 3D Object Lab)                    |
 
 Switching experiences keeps what you made in each one, including its undo history. Anything a
 hand is holding at that moment is let go first.
@@ -359,15 +359,70 @@ Draw glowing lines in the air with your index fingertip.
 
 ---
 
-## 7. Experiences still to come (placeholders for now)
+## 7. Hand Strings (key 4)
+
+Glowing sparks on every joint of your hands, joined by stretchy threads that sag and wobble as you
+move. There's nothing to grab: just move your hands and play.
+
+### What you see
+
+- A **glowing spark on all 21 joints** of each hand. Fingertips are a little bigger.
+- **Threads** between the sparks. They **hang down slightly and wobble** like elastic strings when
+  you move, then settle.
+- **Colours slowly drift** through the rainbow. Your two hands have different colours, and each
+  finger is slightly different.
+- **Move faster = brighter and bigger** sparks and threads.
+- **Fingertip trails**: short glowing streaks that fade behind your fingertips.
+- The app's usual hand skeleton, pinch rings and cursor rings are **hidden** here, because the
+  strings draw your hands instead.
+
+### Threads (tool panel)
+
+| Button            | Draws                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Skeleton**      | Threads along the bones of each hand                                                                                     |
+| **Web** (default) | Skeleton + a ring through the five fingertips of each hand + each fingertip to **the same fingertip on your other hand** |
+| **Full mesh**     | Web + every fingertip to every other fingertip, including **every left fingertip to every right fingertip**              |
+
+- The threads across hands only appear while **both hands** are in view.
+- Switching style lets the threads start fresh (hanging at rest).
+
+### Fingertip trails (tool panel)
+
+- **Off**, **Short** (default, ≈ 0.3 s) or **Long** (≈ 0.75 s).
+
+### Settle, and hands leaving
+
+- **Settle the threads** (button, **R** or **C**): every thread stops wobbling and hangs at rest,
+  and the trails are cleared.
+- A hand that **leaves the picture fades out** (≈ 0.15 s), taking its threads with it. When it comes
+  back its threads start at rest; they never fling in from somewhere.
+- There's nothing to undo here, so **Ctrl+Z does nothing**.
+
+### Things to try
+
+- Pull your hands apart quickly: the cross-hand threads stretch, bow and wobble back.
+- Weave your fingers past each other in **Full mesh** (a "cat's cradle").
+- Wave a hand fast with **Long** trails.
+
+### Status messages
+
+| Message                                                               | Meaning                      |
+| --------------------------------------------------------------------- | ---------------------------- |
+| Show your hands to the camera                                         | No hand in view              |
+| Bring your other hand in to link fingertips across                    | One hand in view             |
+| Strings link your fingertips across both hands — move, stretch, weave | Both hands, Web or Full mesh |
+| Move your hands — threads stretch along your fingers                  | Both hands, Skeleton         |
+
+---
+
+## 8. Experiences still to come (placeholders for now)
 
 Each unbuilt experience currently shows a **spinning shape**. Point at it (your cursor ring turns
 white) and **pinch to grab and drag it**; let go to drop it. This checks the hand controls work
 before the real experience arrives. Planned controls (subject to change; this file will be updated
 when each is built):
 
-- **4 · Hand Strings (Phase 9):** glowing particles and elastic threads on your hand joints; just
-  move your hands.
 - **5 · Filter Lab (Phase 10):** a "magic lens" strip that filters the camera behind it (thermal,
   sketch, glitch…). Grab it with a two-hand pinch; thumb-pinky tap with the right hand for the next
   filter, the left hand for the previous one; ← / → or [ / ] also switch filters.
@@ -379,7 +434,7 @@ when each is built):
 
 ---
 
-## 8. Debug panel and recordings
+## 9. Debug panel and recordings
 
 Press **`** (backtick) or click **Debug**.
 
@@ -395,7 +450,7 @@ Press **`** (backtick) or click **Debug**.
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Problem                                       | Try                                                                                                                         |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -411,6 +466,8 @@ Press **`** (backtick) or click **Debug**.
 
 ## Changelog of controls
 
+- **2026-09-27** — **Hand Strings built**: glowing joints, elastic threads (Skeleton / Web / Full
+  mesh), fingertip trails (Off / Short / Long), faster = brighter, Settle (R / C).
 - **2026-09-27** — **Spatial Panel built**: hold a picture with both hands (move, resize, rotate),
   glowing handles, sample pictures, animated pattern, live camera, camera snapshot, your own
   picture, Reset (undoable).

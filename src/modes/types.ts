@@ -10,6 +10,8 @@ import type {
   ModeUiStates,
   PanelContent,
   Settings,
+  StringsStyle,
+  TrailLength,
   VoxelMaterial,
   VoxelTool,
 } from '@/core/types';
@@ -51,12 +53,19 @@ export type ToolAction =
   /** Show a sample, the live camera or the animated pattern; 'snapshot' takes a new one. */
   | { type: 'panelContent'; content: Exclude<PanelContent, 'file'> }
   /** The user's own picture: an object URL the panel takes ownership of (and revokes). */
-  | { type: 'panelFile'; url: string; name: string };
+  | { type: 'panelFile'; url: string; name: string }
+  | { type: 'stringsStyle'; style: StringsStyle }
+  | { type: 'stringsTrails'; trails: TrailLength };
 
 export type ModeAction = KeyAction | ToolAction;
 
 export interface SpatialMode {
   readonly id: ModeId;
+  /**
+   * The experience draws the hands itself (Hand Strings): Core then skips the skeleton, the
+   * pinch / two-hand indicators and the cursor rings.
+   */
+  readonly drawsHands?: boolean;
   /** Called on EVERY activation. Create resources lazily on the first call; keep them after. */
   enter(ctx: ModeContext): void;
   update(frame: InteractionFrame): void;

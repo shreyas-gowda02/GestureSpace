@@ -41,7 +41,8 @@ export const VIEW_H = 720;
 
 /** 1280×720 view, the app's default camera (fov 50, z = 20, looking down −Z). */
 export function baseContext(
-  statuses: string[] = [],
+  /** Every status message, in order (omit it and statuses are dropped: no growing list). */
+  statuses?: string[],
   ui: Partial<ModeUiStates>[] = [],
 ): BaseContext {
   const viewport = new ViewportMapper();
@@ -61,7 +62,7 @@ export function baseContext(
     cursors: new RaycastCursor(coords),
     capture: new CaptureManager(),
     settings: { ...DEFAULT_SETTINGS },
-    emitStatus: (t) => statuses.push(t),
+    emitStatus: statuses ? (t) => statuses.push(t) : () => {},
     publishUi: (id, state) => ui.push({ [id]: state }),
   };
 }

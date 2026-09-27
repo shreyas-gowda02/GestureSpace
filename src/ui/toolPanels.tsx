@@ -5,7 +5,15 @@
 import { useRef } from 'react';
 import { modeAction, resetView } from '@/app/bootstrap';
 import { TUNING } from '@/config/tuning';
-import type { DrawTool, ModeId, PanelContent, VoxelMaterial, VoxelTool } from '@/core/types';
+import type {
+  DrawTool,
+  ModeId,
+  PanelContent,
+  StringsStyle,
+  TrailLength,
+  VoxelMaterial,
+  VoxelTool,
+} from '@/core/types';
 import { useAppStore } from '@/state/appStore';
 
 const VOXEL_TOOLS: readonly { tool: VoxelTool; label: string }[] = [
@@ -293,6 +301,61 @@ function PanelTools() {
   );
 }
 
+const STRING_STYLES: readonly { style: StringsStyle; label: string }[] = [
+  { style: 'skeleton', label: 'Skeleton' },
+  { style: 'web', label: 'Web' },
+  { style: 'mesh', label: 'Full mesh' },
+];
+
+const TRAILS: readonly { trails: TrailLength; label: string }[] = [
+  { trails: 'off', label: 'Off' },
+  { trails: 'short', label: 'Short' },
+  { trails: 'long', label: 'Long' },
+];
+
+function StringsTools() {
+  const ui = useAppStore((s) => s.modeUi.strings);
+  if (!ui) return null;
+
+  return (
+    <>
+      <h3 className="gs-toolpanel__sub">Threads</h3>
+      <div className="gs-segmented" role="group" aria-label="Threads">
+        {STRING_STYLES.map(({ style, label }) => (
+          <button
+            key={style}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.style === style}
+            onClick={() => modeAction({ type: 'stringsStyle', style })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">Fingertip trails</h3>
+      <div className="gs-segmented" role="group" aria-label="Fingertip trails">
+        {TRAILS.map(({ trails, label }) => (
+          <button
+            key={trails}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.trails === trails}
+            onClick={() => modeAction({ type: 'stringsTrails', trails })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <button type="button" className="gs-btn gs-depthlock" onClick={() => resetView()}>
+        Settle the threads <kbd>R</kbd>
+      </button>
+    </>
+  );
+}
+
 /** The active experience's controls (nothing for experiences still shown as placeholders). */
 export function ModeTools({ mode }: { mode: ModeId }) {
   switch (mode) {
@@ -300,6 +363,8 @@ export function ModeTools({ mode }: { mode: ModeId }) {
       return <VoxelTools />;
     case 'panel':
       return <PanelTools />;
+    case 'strings':
+      return <StringsTools />;
     case 'draw':
       return <DrawTools />;
     default:
