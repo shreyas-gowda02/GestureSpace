@@ -1,5 +1,5 @@
 // Experience 3 — Air Draw (§15): point with the dominant hand's index finger (others curled), keep
-// it out for 3 s while a ring fills round the fingertip (D57), and the fingertip draws glowing
+// it out for 2 s while a ring fills round the fingertip (D57), and the fingertip draws glowing
 // strokes; lower the finger or open the hand to lift the pen (D48 — the user's choice over the
 // spec's pinch). Make a fist with the OTHER hand and the drawing fingertip becomes an eraser,
 // wiping away every stroke it touches until the fist opens (D49); the Eraser tool (X) does the

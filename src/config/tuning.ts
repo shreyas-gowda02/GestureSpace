@@ -371,11 +371,11 @@ export const TUNING = {
     fistGraceMs: 150,
     /**
      * A line starts only once the index finger has stayed out (pointing) this long (D57, the
-     * user's request: a line began the moment the finger came out). The finger may move meanwhile;
-     * the line starts wherever the fingertip is when the wait ends. Lowering the finger earlier
-     * draws nothing. Every line waits; the erasers don't. 0 = draw at once.
+     * user's request: a line began the moment the finger came out; 3 s first felt too long). The
+     * finger may move meanwhile; the line starts wherever the fingertip is when the wait ends.
+     * Lowering the finger earlier draws nothing. Every line waits; the erasers don't. 0 = at once.
      */
-    penHoldMs: 3000,
+    penHoldMs: 2000,
     /**
      * The ring that fills round the fingertip during that wait: shown after `showAfterMs` (a brief
      * accidental point doesn't flash it), radius in video heights (≈ 25 px at 720p), line width px.

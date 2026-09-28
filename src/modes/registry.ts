@@ -78,7 +78,7 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     help: [
       {
         gesture: 'Point (index finger out, others curled) and keep it out',
-        action: 'A ring fills round the fingertip for 3 s, then the pen goes down and it draws',
+        action: 'A ring fills round the fingertip for 2 s, then the pen goes down and it draws',
       },
       { gesture: 'Lower the finger or open your hand', action: 'Pen up' },
       {

@@ -198,8 +198,8 @@ export function pinchDragScenario(jitter = 0, seed = 1): LandmarkFixture {
 }
 
 /**
- * Air Draw: right hand points (index out, 0.6 s) and holds still through the pen's 3 s wait (D57,
- * to 4.0 s), then the fingertip traces a wave to the right (4.0–5.6 s), and the hand opens (6.0 s).
+ * Air Draw: right hand points (index out, 0.6 s) and holds still through the pen's 2 s wait (D57)
+ * and a little longer (to 4.0 s), then the fingertip traces a wave to the right (4.0–5.6 s), and the hand opens (6.0 s).
  * Optional jitter.
  */
 export function pointDrawScenario(jitter = 0, seed = 1): LandmarkFixture {

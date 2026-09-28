@@ -3,13 +3,13 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-28, Air Draw: keep the finger out 3 s before a line starts._
+_Last updated: 2026-09-28, Air Draw: keep the finger out 2 s before a line starts._
 
 | Key | Experience          | Status                                                                  |
 | --- | ------------------- | ----------------------------------------------------------------------- |
 | 1   | Voxel Builder       | ✅ Ready (building, depth layers, move / resize / twist, 3D fist turn)  |
 | 2   | Spatial Panel       | ✅ Ready (hold, move, resize, rotate; pictures, camera, your own)       |
-| 3   | Air Draw            | ✅ Ready (point + wait 3 s to draw, fist eraser)                        |
+| 3   | Air Draw            | ✅ Ready (point + wait 2 s to draw, fist eraser)                        |
 | 4   | Hand Strings        | ✅ Ready (glowing joints, elastic threads, fingertip trails, 3 styles)  |
 | 5   | Filter Lab          | ✅ Ready (a lens strip with 13 camera filters; live / frozen / picture) |
 | 6   | Portal / Dimensions | ✅ Ready (a portal into 4 worlds; opens out of a glowing line)          |
@@ -311,15 +311,15 @@ Draw glowing lines in the air with your index fingertip.
 | Do this                                                          | Result                                                                                |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | **Point** with your right hand (index out, other fingers curled) | A **ring fills** round your fingertip. Nothing is drawn yet                           |
-| **Keep the finger out for 3 seconds** (until the ring is full)   | **Pen down**: the line starts wherever your fingertip is now                          |
+| **Keep the finger out for 2 seconds** (until the ring is full)   | **Pen down**: the line starts wherever your fingertip is now                          |
 | Move the pointing finger                                         | Draws a smooth glowing line                                                           |
 | **Lower the finger** (curl it) or **open your hand**             | **Pen up**: the line is finished                                                      |
-| Point again                                                      | The ring fills again; after 3 s a new line starts. **Every line waits** the 3 seconds |
+| Point again                                                      | The ring fills again; after 2 s a new line starts. **Every line waits** the 2 seconds |
 
 - **You can move while the ring fills**: point, move your fingertip to where the line should
-  begin, and wait for the ring. The status bar counts down: "the line starts in 3 s … 2 s … 1 s".
+  begin, and wait for the ring. The status bar counts down: "the line starts in 2 s … 1 s".
 - Lowering the finger before the ring is full draws **nothing**, and the next point waits the full
-  3 seconds again. So does opening Help or Settings, losing the hand, or pressing Ctrl+Z meanwhile.
+  2 seconds again. So does opening Help or Settings, losing the hand, or pressing Ctrl+Z meanwhile.
 - The erasers **don't wait**: the left fist and the Eraser tool work at once.
 - Pinching does **not** draw; only pointing does.
 - Holding still while pointing doesn't pile up points.
@@ -368,8 +368,8 @@ Draw glowing lines in the air with your index fingertip.
 
 | Message                                                                      | Meaning                       |
 | ---------------------------------------------------------------------------- | ----------------------------- |
-| Pen — point your right index finger for 3 s to draw · left fist = eraser     | Ready                         |
-| Keep your finger out — the line starts in 3 s (… 2 s, 1 s)                   | Pointing; the ring is filling |
+| Pen — point your right index finger for 2 s to draw · left fist = eraser     | Ready                         |
+| Keep your finger out — the line starts in 2 s (… 1 s)                        | Pointing; the ring is filling |
 | Drawing — lower your finger to lift the pen                                  | A line is being drawn         |
 | Erasing — your right fingertip wipes lines away; open your left hand to stop | Fist eraser                   |
 | Eraser — point at strokes to remove them (red = will go) · X for the pen     | Eraser tool selected          |
@@ -770,7 +770,7 @@ Press **`** (backtick) or click **Debug**.
 | Blocks land away from where I aimed           | Watch the ghost block and pinch where it is; the block lands exactly there                                                  |
 | The structure turned or moved by itself       | Ctrl+Z undoes it. Please record it (Debug → Record) so it can be fixed                                                      |
 | Low FPS                                       | Close other heavy tabs; Settings → Quality **Low** or Hand tracking **15 / s**. The graphics chip is shared with tracking   |
-| Air Draw doesn't start a line                 | Keep your index finger out until the ring round it is full (3 s); lower it and point again if the ring isn't filling        |
+| Air Draw doesn't start a line                 | Keep your index finger out until the ring round it is full (2 s); lower it and point again if the ring isn't filling        |
 | Pinches don't register (or too easily)        | Settings → **Pinch sensitivity** (right = earlier, left = fingers must touch)                                               |
 | My work is gone                               | It's kept per browser: a private window or another browser starts empty. Use **Export** to keep a copy                      |
 | The camera picture is black / "camera in use" | Close other apps using the camera, then click Start / Enable camera again                                                   |
@@ -779,7 +779,7 @@ Press **`** (backtick) or click **Debug**.
 
 ## Changelog of controls
 
-- **2026-09-28** — Air Draw: **keep the pointing finger out 3 seconds before a line starts** (a
+- **2026-09-28** — Air Draw: **keep the pointing finger out 2 seconds before a line starts** (a
   ring fills round the fingertip and the status bar counts down); lowering it earlier draws
   nothing. Every line waits; the erasers don't.
 - **2026-09-28** — **Help** (H / ?) shows each experience's gestures and every key. **Settings**

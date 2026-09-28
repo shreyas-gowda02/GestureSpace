@@ -550,7 +550,7 @@ describe('DrawMode: a fist with the other hand is the eraser (D49)', () => {
   });
 });
 
-describe('DrawMode: the finger stays out 3 s before a line starts (D57)', () => {
+describe('DrawMode: the finger stays out 2 s before a line starts (D57)', () => {
   it('pointing and moving for less than the wait draws nothing; the line starts where the fingertip is then', () => {
     const { rig, mode } = drawRig();
     tipAt(rig, { x: 0.2, y: 0.5 });
