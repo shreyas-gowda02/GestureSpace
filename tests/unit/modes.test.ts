@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import type { Command, InteractionFrame, ModeId, SceneCursor } from '@/core/types';
+import type { Command, InteractionFrame, ModeId } from '@/core/types';
 import { MODE_IDS } from '@/core/types';
-import { makeGestureState } from '@/gestures/stateMachine';
-import { makeTwoHandState } from '@/gestures/twoHand';
 import { ModeController } from '@/modes/ModeController';
 import { MODE_FACTORIES } from '@/modes/registry';
 import { CommandHistory } from '@/modes/shared/history';
@@ -156,130 +154,8 @@ describe('ModeController', () => {
   });
 });
 
-describe('registry + PlaceholderMode', () => {
+describe('registry', () => {
   it('has a factory for every experience', () => {
     for (const id of MODE_IDS) expect(MODE_FACTORIES[id]().id).toBe(id);
-  });
-
-  it('pinch on the shape captures and drags it; releasing the pinch drops it', () => {
-    const statuses: string[] = [];
-    const base = baseContext(statuses);
-    const mc = new ModeController(base, MODE_FACTORIES);
-    mc.switchTo('objectLab');
-    const root = base.scene.getObjectByName('Mode:objectLab');
-    expect(root?.visible).toBe(true);
-    expect(base.cursors.targetCount).toBe(1);
-
-    const pinch = makeGestureState();
-    const cursor: SceneCursor = { side: 'right', screen: { x: 640, y: 360 }, ndc: { x: 0, y: 0 } };
-    const frame: InteractionFrame = {
-      timestamp: 0,
-      dt: 1 / 60,
-      hands: { timestamp: 0, inferenceTimestamp: 0 },
-      gestures: {
-        right: {
-          pinch,
-          grab: makeGestureState(),
-          point: makeGestureState(),
-          openPalm: makeGestureState(),
-          thumbPinky: makeGestureState(),
-          depthSignal: 0,
-        },
-        twoHand: makeTwoHandState(),
-      },
-      cursors: { right: cursor },
-      dominant: 'right',
-      activeMode: 'objectLab',
-    };
-    const hitShape = () => {
-      root?.updateMatrixWorld(true);
-      cursor.hit = undefined;
-      base.cursors.update({ timestamp: 0, inferenceTimestamp: 0 }); // no-op, keeps API honest
-      const ray = base.coords.rayThrough(cursor.ndc);
-      const hits = ray.intersectObjects(root ? [root] : [], true);
-      const first = hits[0];
-      cursor.hit = first
-        ? { point: first.point, kind: 'object', objectId: 'objectLab-placeholder' }
-        : undefined;
-    };
-
-    // Pinch starts over the shape → captured.
-    hitShape();
-    pinch.phase = 'active';
-    pinch.justStarted = true;
-    mc.update(frame);
-    expect(base.capture.get('right')?.targetId).toBe('objectLab-placeholder');
-    expect(statuses.at(-1)).toContain('captured');
-
-    // Move the hand → the shape follows (no jump on grab).
-    pinch.justStarted = false;
-    cursor.ndc = { x: 0.3, y: 0.2 };
-    mc.update(frame);
-    expect(root?.position.x).toBeGreaterThan(1);
-    expect(root?.position.y).toBeGreaterThan(0.5);
-
-    // Release the pinch → dropped where it is.
-    const x = root?.position.x;
-    pinch.phase = 'released';
-    pinch.justEnded = true;
-    mc.update(frame);
-    expect(base.capture.count).toBe(0);
-    expect(root?.position.x).toBe(x);
-
-    // Reset view puts it back; switching away hides it.
-    mc.resetView();
-    expect(root?.position.x).toBe(0);
-    mc.switchTo('draw');
-    expect(root?.visible).toBe(false);
-    mc.dispose();
-    expect(base.scene.getObjectByName('Mode:objectLab')).toBeUndefined();
-  });
-});
-
-describe('left/right renamed while dragging (D42)', () => {
-  it('the placeholder keeps following the hand that holds it', () => {
-    const base = baseContext();
-    const mc = new ModeController(base, MODE_FACTORIES);
-    mc.switchTo('objectLab');
-    const root = base.scene.getObjectByName('Mode:objectLab');
-    const pinch = makeGestureState();
-    const hand = {
-      pinch,
-      grab: makeGestureState(),
-      point: makeGestureState(),
-      openPalm: makeGestureState(),
-      thumbPinky: makeGestureState(),
-      depthSignal: 0,
-    };
-    const cursor: SceneCursor = {
-      side: 'right',
-      screen: { x: 640, y: 360 },
-      ndc: { x: 0, y: 0 },
-      hit: { point: { x: 0, y: 0, z: 1.5 }, kind: 'object', objectId: 'objectLab-placeholder' },
-    };
-    const frame: InteractionFrame = {
-      timestamp: 0,
-      dt: 1 / 60,
-      hands: { timestamp: 0, inferenceTimestamp: 0 },
-      gestures: { right: hand, twoHand: makeTwoHandState() },
-      cursors: { right: cursor },
-      dominant: 'right',
-      activeMode: 'objectLab',
-    };
-    pinch.phase = 'active';
-    pinch.justStarted = true;
-    mc.update(frame);
-    expect(base.capture.get('right')?.targetId).toBe('objectLab-placeholder');
-
-    // The tracker renames the holding hand: Core moves the captures and tells the mode.
-    base.capture.swapSides();
-    mc.swapSides();
-    pinch.justStarted = false;
-    frame.gestures = { left: hand, twoHand: makeTwoHandState() };
-    frame.cursors = { left: { ...cursor, side: 'left', ndc: { x: 0.3, y: 0.2 } } };
-    mc.update(frame);
-    expect(base.capture.get('left')?.targetId).toBe('objectLab-placeholder'); // still held…
-    expect(root?.position.x).toBeGreaterThan(1); // …and still following the hand
-    mc.dispose();
   });
 });

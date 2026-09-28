@@ -1,6 +1,8 @@
 // Test rig for experiences: a real ModeController with a headless ModeContext (no WebGL) and
 // hand-made InteractionFrames, so a mode sees exactly the kind of input Core gives it.
 
+import { Session } from 'node:inspector/promises';
+import { setFlagsFromString } from 'node:v8';
 import * as THREE from 'three';
 import { DEFAULT_SETTINGS } from '@/config/tuning';
 import { FixturePlaybackSource, type LandmarkFixture } from '@/core/input';
@@ -304,4 +306,62 @@ export class ModeRig {
   run(frames: number, ms = 1000 / 60): void {
     for (let i = 0; i < frames; i++) this.step(ms);
   }
+}
+
+let boundaryPinned = false;
+
+/**
+ * Bytes one experience's code allocates per frame, from V8's sampling heap profiler, told to keep
+ * objects that were already collected (by default it reports only survivors, which hides per-frame
+ * garbage). Counted: everything allocated while a frame from a file matching `pattern` is on the
+ * stack, including library calls made from there (a `new THREE.Vector3()` is charged to three's
+ * constructor). The sampler only sees physical stack frames: an experience inlined into
+ * ModeController.update would be charged to that instead (a per-frame Vector3 went unseen), so that
+ * call is kept unoptimised (V8 test hook). `run` plays one window and returns its frame count; it
+ * is run `warmups` times first (let the JIT optimise), then `windows` times measured, and the lowest
+ * window counts: a real per-frame allocation is in every window, a one-off JIT blip isn't.
+ */
+export async function allocationsPerFrame(
+  pattern: RegExp,
+  run: () => number,
+  warmups: number,
+  windows = 2,
+): Promise<{ perFrame: number; detail: string }> {
+  if (!boundaryPinned) {
+    boundaryPinned = true;
+    setFlagsFromString('--allow-natives-syntax');
+    // A V8 test hook (runtime flag above), not eval of data.
+    const neverOptimize = new Function('f', '%NeverOptimizeFunction(f);') as (f: unknown) => void;
+    neverOptimize(ModeController.prototype.update);
+  }
+  for (let i = 0; i < warmups; i++) run();
+  const session = new Session();
+  session.connect();
+  await session.post('HeapProfiler.enable');
+  let best = { perFrame: Infinity, detail: '' };
+  for (let w = 0; w < windows; w++) {
+    await session.post('HeapProfiler.startSampling', {
+      samplingInterval: 128,
+      includeObjectsCollectedByMajorGC: true,
+      includeObjectsCollectedByMinorGC: true,
+    });
+    const frames = run();
+    const { profile } = await session.post('HeapProfiler.stopSampling');
+    type Node = typeof profile.head;
+    const ours: string[] = [];
+    let bytes = 0;
+    const walk = (n: Node, inside: boolean): void => {
+      const here = inside || pattern.test(n.callFrame.url);
+      if (here && n.selfSize > 0) {
+        ours.push(`${n.callFrame.functionName || '(anonymous)'} ${n.selfSize} B`);
+        bytes += n.selfSize;
+      }
+      for (const c of n.children) walk(c, here);
+    };
+    walk(profile.head, false);
+    const perFrame = bytes / Math.max(1, frames);
+    if (perFrame < best.perFrame) best = { perFrame, detail: ours.join(', ') };
+  }
+  session.disconnect();
+  return best;
 }

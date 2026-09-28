@@ -18,6 +18,7 @@ export type KeyAction =
   | { type: 'filterNext' }
   | { type: 'delete' }
   | { type: 'duplicate' }
+  | { type: 'group' }
   | { type: 'escape' };
 
 export interface KeyInput {
@@ -41,8 +42,9 @@ export const KEYBINDING_HELP: readonly { keys: string; action: string }[] = [
   { keys: 'L', action: 'Depth lock' },
   { keys: 'X', action: 'Build / erase (Voxel) · pen / eraser (Draw)' },
   { keys: '← / →  or  [ / ]', action: 'Filter prev / next' },
-  { keys: 'Delete', action: 'Delete selection' },
+  { keys: 'Delete / Backspace', action: 'Delete selection' },
   { keys: 'D', action: 'Duplicate' },
+  { keys: 'G', action: 'Group / ungroup selection' },
   { keys: 'Esc', action: 'Close overlays / release' },
 ];
 
@@ -83,9 +85,12 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
     case ']':
       return { type: 'filterNext' };
     case 'Delete':
+    case 'Backspace':
       return { type: 'delete' };
     case 'd':
       return { type: 'duplicate' };
+    case 'g':
+      return { type: 'group' };
     case 'Escape':
       return { type: 'escape' };
     default:

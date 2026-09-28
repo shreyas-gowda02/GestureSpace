@@ -9,6 +9,8 @@ import type {
   ModeId,
   ModeUiStates,
   FilterPreset,
+  ObjectKind,
+  ObjectLook,
   FilterSource,
   PanelContent,
   PortalWorld,
@@ -63,7 +65,16 @@ export type ToolAction =
   /** 'frozen' takes a new camera snapshot each time. */
   | { type: 'filterSource'; source: Exclude<FilterSource, 'file'> }
   | { type: 'filterFile'; url: string; name: string }
-  | { type: 'portalWorld'; world: PortalWorld };
+  | { type: 'portalWorld'; world: PortalWorld }
+  /** A new shape in the middle of the view (selected). */
+  | { type: 'objectSpawn'; kind: ObjectKind }
+  /** Colour / look for new shapes and the selection. */
+  | { type: 'objectColor'; color: string }
+  | { type: 'objectLook'; look: ObjectLook }
+  /** "Add to selection" on / off. */
+  | { type: 'objectMulti' }
+  | { type: 'objectGroup' }
+  | { type: 'objectUngroup' };
 
 export type ModeAction = KeyAction | ToolAction;
 

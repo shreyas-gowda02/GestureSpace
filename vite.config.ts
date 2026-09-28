@@ -12,8 +12,9 @@ export default defineConfig({
   // The vision worker dynamically imports MediaPipe → needs code-splitting → ES module output.
   worker: { format: 'es' },
   preview: { port: 4173, strictPort: true },
-  // three.js alone is ~600 kB minified; chunk splitting is revisited in Phase 13 (performance).
-  build: { target: 'es2022', sourcemap: true, chunkSizeWarningLimit: 1000 },
+  // three.js alone is ~600 kB minified; all seven experiences make ~1,019 kB (Phase 11). Chunk
+  // splitting (e.g. loading each experience when first opened) is Phase 13 (performance).
+  build: { target: 'es2022', sourcemap: true, chunkSizeWarningLimit: 1200 },
   test: {
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     environment: 'node',

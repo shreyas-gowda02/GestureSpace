@@ -12,7 +12,7 @@ import {
   stopCamera,
   undo,
 } from '@/app/bootstrap';
-import { BUILT_MODES, MODE_META } from '@/modes/registry';
+import { MODE_META } from '@/modes/registry';
 import { useAppStore, type CameraStatus } from '@/state/appStore';
 import { DebugPanel } from './DebugPanel';
 import { ModeDock } from './ModeDock';
@@ -109,14 +109,7 @@ function ToolPanel() {
       {open && (
         <div className="gs-toolpanel__body">
           <h2 className="gs-toolpanel__heading">{meta.name}</h2>
-          {BUILT_MODES.has(activeMode) ? (
-            <p className="gs-muted">{meta.tagline}</p>
-          ) : (
-            <p className="gs-muted">
-              Preview: a placeholder shape you can pinch and drag. The full experience and its tools
-              arrive in Phase {meta.phase}.
-            </p>
-          )}
+          <p className="gs-muted">{meta.tagline}</p>
           <ModeTools mode={activeMode} />
           <h3 className="gs-toolpanel__sub">Gestures</h3>
           <ul className="gs-helplist">

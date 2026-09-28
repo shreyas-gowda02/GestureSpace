@@ -92,9 +92,9 @@ src/
               interaction plane; P5: HandAim steady aim) · DepthEstimator.ts (P4) · CaptureManager.ts (P4)
   scene/      SceneManager.ts (P1: renderer, camera, dispose helpers)
               CameraBackground.ts (P1) · overlay.ts (P2/P3: OverlayCanvas2D, skeleton, gesture HUD)
-              materials.ts (P4: lighting, CursorMarker, highlight; P11 selection outline)
+              materials.ts (P4: lighting, CursorMarker)
   modes/      registry.ts (meta + factories) · types.ts (P4: SpatialMode, ModeContext)
-              ModeController.ts (P4) · PlaceholderMode.ts (P4, temporary until P11)
+              ModeController.ts (P4)
     shared/   history.ts (P4: CommandHistory) · TwoHandTransform.ts (P6: two-hand grab + fist
               orbit, undoable)
               TextureSurface.ts (P7: surface + TextureSources) · glsl.ts (P1: coverUv, mirror, hsv)
@@ -105,7 +105,8 @@ src/
     strings/  StringsMode.ts · springs.ts   (P9)
     filter/   FilterLabMode.ts · filters.ts (all 13 presets + pipeline)   (P10)
     portal/   PortalMode.ts · portalContent.ts (material, presets, other-world scene)   (P10)
-    objectLab/ ObjectLabMode.ts · objects.ts (primitives, commands, transform)   (P11)
+    objectLab/ ObjectLabMode.ts · objects.ts (primitives, groups, commands, SelectionRig)
+              SpawnMenu.ts (the open-hand ring menu)   (P11)
   ui/         AppShell.tsx (top bar, tool panel, status bar) · ModeDock.tsx (+ icons) · styles.css
               PermissionScreen.tsx (P1) · DebugPanel.tsx (P2) · GestureStatus (P3, in AppShell)
               overlays.tsx (P12: Help, Settings, Onboarding) · toolPanels.tsx (P5: per-mode controls,
@@ -116,7 +117,8 @@ src/
 tests/        unit/ · integration/ · e2e/
               fixtures/syntheticHands.ts (pose + scenario generator) · fixtures/landmarks/*.json
               fixtures/modeHarness.ts (ModeRig: drive one experience frame by frame; pipelineRig:
-              a headless Core that plays hand recordings into one experience)
+              a headless Core that plays hand recordings into one experience; allocationsPerFrame:
+              heap sampling of one experience's code)
               fixtures/landmarks/real/ (user's webcam recordings, replayed end to end by
               integration/realHands.test.ts — run it after any tracking/gesture change)
 scripts/      copy-mediapipe-assets.mjs · fetch-model.mjs · make-fixtures.ts (node runs TS)

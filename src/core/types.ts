@@ -234,7 +234,25 @@ export interface PortalUiState {
   held: boolean;
 }
 
-/** Per experience: what its tool panel shows. Grows as experiences land. */
+/** 3D Object Lab primitives (§20) and how they look. */
+export type ObjectKind = 'cube' | 'sphere' | 'cylinder' | 'plane' | 'torus';
+export type ObjectLook = 'solid' | 'glow' | 'glass';
+
+export interface ObjectLabUiState {
+  /** Colour ('#rrggbb') and look for new shapes — and of the selection, when one is picked. */
+  color: string;
+  look: ObjectLook;
+  /** "Add to selection": a pinch adds shapes instead of replacing the selection. */
+  multi: boolean;
+  /** Shapes / groups in the scene, and how many of them are selected. */
+  count: number;
+  selected: number;
+  /** Two or more selected (Group) / a group among them (Ungroup). */
+  canGroup: boolean;
+  canUngroup: boolean;
+}
+
+/** Per experience: what its tool panel shows. */
 export interface ModeUiStates {
   voxel: VoxelUiState;
   panel: PanelUiState;
@@ -242,4 +260,5 @@ export interface ModeUiStates {
   strings: StringsUiState;
   filter: FilterUiState;
   portal: PortalUiState;
+  objectLab: ObjectLabUiState;
 }

@@ -6,11 +6,13 @@ import { useRef } from 'react';
 import { modeAction, resetView } from '@/app/bootstrap';
 import { TUNING } from '@/config/tuning';
 import { FILTER_PRESETS } from '@/modes/filter/filters';
+import { OBJECT_KINDS } from '@/modes/objectLab/objects';
 import { PORTAL_WORLDS } from '@/modes/portal/portalContent';
 import type {
   DrawTool,
   FilterSource,
   ModeId,
+  ObjectLook,
   PanelContent,
   StringsStyle,
   TrailLength,
@@ -487,7 +489,120 @@ function PortalTools() {
   );
 }
 
-/** The active experience's controls (nothing for experiences still shown as placeholders). */
+const OBJECT_LOOKS: readonly { look: ObjectLook; label: string }[] = [
+  { look: 'solid', label: 'Solid' },
+  { look: 'glow', label: 'Glow' },
+  { look: 'glass', label: 'Glass' },
+];
+
+function ObjectLabTools() {
+  const ui = useAppStore((s) => s.modeUi.objectLab);
+  if (!ui) return null;
+  const some = ui.selected > 0;
+
+  return (
+    <>
+      <h3 className="gs-toolpanel__sub">Add a shape</h3>
+      <div className="gs-choices" role="group" aria-label="Add a shape">
+        {OBJECT_KINDS.map(({ kind, name }) => (
+          <button
+            key={kind}
+            type="button"
+            className="gs-btn"
+            onClick={() => modeAction({ type: 'objectSpawn', kind })}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">Colour</h3>
+      <div className="gs-swatches" role="group" aria-label="Shape colour">
+        {TUNING.voxel.palette.map(({ name, hex }) => (
+          <button
+            key={hex}
+            type="button"
+            className="gs-swatch"
+            style={{ background: hex }}
+            aria-label={name}
+            title={some ? `${name} (also recolours the selection)` : name}
+            aria-pressed={ui.color === hex}
+            onClick={() => modeAction({ type: 'objectColor', color: hex })}
+          />
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">Look</h3>
+      <div className="gs-segmented" role="group" aria-label="Shape look">
+        {OBJECT_LOOKS.map(({ look, label }) => (
+          <button
+            key={look}
+            type="button"
+            className="gs-btn"
+            aria-pressed={ui.look === look}
+            onClick={() => modeAction({ type: 'objectLook', look })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="gs-toolpanel__sub">Selection</h3>
+      <button
+        type="button"
+        className="gs-btn gs-depthlock"
+        aria-pressed={ui.multi}
+        onClick={() => modeAction({ type: 'objectMulti' })}
+      >
+        {ui.multi ? 'Add to selection: on' : 'Add to selection: off'}
+      </button>
+      <div className="gs-segmented" role="group" aria-label="Copy or delete the selection">
+        <button
+          type="button"
+          className="gs-btn"
+          disabled={!some}
+          onClick={() => modeAction({ type: 'duplicate' })}
+        >
+          Copy <kbd>D</kbd>
+        </button>
+        <button
+          type="button"
+          className="gs-btn"
+          disabled={!some}
+          onClick={() => modeAction({ type: 'delete' })}
+        >
+          Delete <kbd>Del</kbd>
+        </button>
+      </div>
+      <div className="gs-segmented" role="group" aria-label="Group or ungroup the selection">
+        <button
+          type="button"
+          className="gs-btn"
+          disabled={!ui.canGroup}
+          onClick={() => modeAction({ type: 'objectGroup' })}
+        >
+          Group <kbd>G</kbd>
+        </button>
+        <button
+          type="button"
+          className="gs-btn"
+          disabled={!ui.canUngroup}
+          onClick={() => modeAction({ type: 'objectUngroup' })}
+        >
+          Ungroup
+        </button>
+      </div>
+      <button type="button" className="gs-btn gs-depthlock" onClick={() => resetView()}>
+        {some ? 'Reset turn & size' : 'Reset all turns & sizes'} <kbd>R</kbd>
+      </button>
+      <p className="gs-muted gs-toolpanel__count">
+        {ui.count} {ui.count === 1 ? 'object' : 'objects'} · {ui.selected} selected
+      </p>
+    </>
+  );
+}
+
+/** The active experience's controls. */
 export function ModeTools({ mode }: { mode: ModeId }) {
   switch (mode) {
     case 'voxel':
@@ -502,7 +617,7 @@ export function ModeTools({ mode }: { mode: ModeId }) {
       return <PortalTools />;
     case 'draw':
       return <DrawTools />;
-    default:
-      return null;
+    case 'objectLab':
+      return <ObjectLabTools />;
   }
 }

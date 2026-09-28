@@ -500,6 +500,79 @@ export const TUNING = {
     uiHz: 10,
   },
 
+  /**
+   * 3D Object Lab (§20). Sizes in scene units (the view is ≈ 18.6 units tall at z = 0); distances
+   * on screen as fractions of the screen height.
+   */
+  objectLab: {
+    /** New shapes' colour (one of TUNING.voxel.palette — the lab shares the voxel palette). */
+    defaultColor: '#21d4d8',
+    /** Shape sizes: each is about 3 units across (≈ 16% of the view height). */
+    shapes: {
+      cube: 2.4,
+      sphere: { radius: 1.45, widthSegments: 48, heightSegments: 32 },
+      cylinder: { radius: 1.1, height: 2.6, segments: 48 },
+      /** A thin square card (a flat plane would vanish edge-on and fight its own outline). */
+      plane: { size: 3, thickness: 0.1 },
+      torus: { radius: 1.1, tube: 0.42, radialSegments: 32, tubularSegments: 96 },
+    },
+    /** New shapes start turned a little (radians) so their 3D shape shows; R turns them back. */
+    restTurn: { tiltX: 0.35, turnY: -0.55 },
+    /** Looks: glow = the shape's own colour as light; glass = see-through. */
+    solid: { roughness: 0.42, metalness: 0.12 },
+    glow: { emissive: 0.85 },
+    glass: { opacity: 0.4 },
+    /** Extra own-colour light on a hovered / selected shape. */
+    highlight: { hover: 0.22, selected: 0.32 },
+    /** Box drawn round a hovered (faint white) or selected (amber) shape, padded by this fraction. */
+    outline: { hover: '#ffffff', hoverOpacity: 0.45, selected: '#ffc53d', pad: 0.08 },
+    /** A new shape pops in (scale 0 → 1, slight overshoot) over this long. */
+    popMs: 220,
+    /** Tool-panel spawns go to the middle, or step this far aside if a shape is already there. */
+    spawnSpacing: 3.5,
+    /** D: copies land this far right and down of the originals (§20: "+1 unit"). */
+    duplicateOffset: 1,
+    /** One shape's size limits (× its size when it was made), however many grabs. */
+    scaleRange: { min: 0.2, max: 6 },
+    /**
+     * Push / pull while holding a shape: the depth signal's change since the pinch (like voxel
+     * extrusion), one step per 0.05 ≈ 8% change in hand size, `unitsPerStep` nearer / farther,
+     * eased at `ease` per second. Q / E move by `unitsPerStep` too. Not yet tuned on real hands.
+     */
+    depth: {
+      step: 0.05,
+      hysteresis: 0.015,
+      dwellMs: 100,
+      deadZone: 0.02,
+      unitsPerStep: 2,
+      ease: 14,
+    },
+    /** Shapes stay this far from the camera (it sits 20 units in front of the middle). */
+    distance: { min: 6, max: 60 },
+    /**
+     * A pinch whose aim moved less than this (≈ 14 px at 720p) is a tap: on empty space it
+     * deselects; with "Add to selection" on, on a selected shape it deselects that shape.
+     */
+    tapMaxMove: 0.02,
+    /**
+     * Radial spawn menu (§20): hold the dominant hand open and still (palm within `stillRadius`)
+     * for `gestures.HOLD_MS` and it opens round the fingertip; a charging ring shows after
+     * `showAfterMs`. Items sit `radius` from the middle, each `itemRadius` big; pinch one to make
+     * that shape; a pinch in the middle (< `centerRadius`) or away from the items closes it, and
+     * unused it closes after `closeMs`. It pops open over `openMs`.
+     */
+    menu: {
+      stillRadius: 0.035,
+      showAfterMs: 200,
+      radius: 0.14,
+      itemRadius: 0.05,
+      centerRadius: 0.045,
+      closeMs: 5000,
+      openMs: 160,
+    },
+    uiHz: 10,
+  },
+
   history: {
     cap: 200,
   },

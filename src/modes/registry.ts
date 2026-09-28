@@ -1,10 +1,9 @@
-// ModeId → metadata (name, icon, help) + factories. Each experience replaces its placeholder
-// factory in the phase that builds it (`phase` below).
+// ModeId → metadata (name, hotkey, help) + factories for the seven experiences.
 
 import { MODE_IDS, type ModeId } from '@/core/types';
-import { PlaceholderMode, type PlaceholderShape } from './PlaceholderMode';
 import { DrawMode } from './draw/DrawMode';
 import { FilterLabMode } from './filter/FilterLabMode';
+import { ObjectLabMode } from './objectLab/ObjectLabMode';
 import { PanelMode } from './panel/PanelMode';
 import { PortalMode } from './portal/PortalMode';
 import { StringsMode } from './strings/StringsMode';
@@ -144,38 +143,23 @@ export const MODE_META: Readonly<Record<ModeId, ModeMeta>> = {
     name: '3D Object Lab',
     shortName: '3D Lab',
     hotkey: '7',
-    tagline: 'Spawn and manipulate 3D objects, Iron-Man style.',
+    tagline: 'Make 3D shapes and arrange them with your hands, Iron-Man style.',
     phase: 11,
     help: [
-      { gesture: 'Open palm (hold)', action: 'Spawn menu' },
-      { gesture: 'Point + pinch', action: 'Select' },
-      { gesture: 'Pinch + drag', action: 'Move selection' },
-      { gesture: 'Two-hand pinch', action: 'Rotate / scale selection' },
+      { gesture: 'Hold your hand open and still', action: 'Shape menu — point at a shape, pinch' },
+      { gesture: 'Point at a shape + pinch', action: 'Select it and pick it up' },
+      { gesture: 'Pinch + drag', action: 'Move the selection' },
+      { gesture: 'Push / pull while holding (Q / E)', action: 'Nearer / farther' },
+      { gesture: 'Both hands pinch', action: 'Turn / resize the selection' },
+      { gesture: 'Fist + move', action: 'Spin / tip the selection in 3D' },
+      { gesture: 'Pinch empty space (tap)', action: 'Deselect' },
+      { gesture: 'D · Delete · G', action: 'Copy · delete · group / ungroup' },
+      { gesture: 'R', action: 'Turn back upright, original size' },
     ],
   },
 };
 
 export const MODE_LIST: readonly ModeMeta[] = MODE_IDS.map((id) => MODE_META[id]);
-
-/** Experiences that are fully built (the rest still run as PlaceholderMode). */
-export const BUILT_MODES: ReadonlySet<ModeId> = new Set<ModeId>([
-  'voxel',
-  'panel',
-  'draw',
-  'strings',
-  'filter',
-  'portal',
-]);
-
-/** Placeholder look per experience until its real implementation lands. */
-const PLACEHOLDERS: Record<'objectLab', { shape: PlaceholderShape; color: string }> = {
-  objectLab: { shape: 'octahedron', color: '#ff7a59' },
-};
-
-function placeholder(id: 'objectLab'): ModeFactory {
-  const meta = MODE_META[id];
-  return () => new PlaceholderMode({ id, name: meta.name, phase: meta.phase, ...PLACEHOLDERS[id] });
-}
 
 export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
   voxel: () => new VoxelMode(),
@@ -184,5 +168,5 @@ export const MODE_FACTORIES: Readonly<Record<ModeId, ModeFactory>> = {
   strings: () => new StringsMode(),
   filter: () => new FilterLabMode(),
   portal: () => new PortalMode(),
-  objectLab: placeholder('objectLab'),
+  objectLab: () => new ObjectLabMode(),
 };

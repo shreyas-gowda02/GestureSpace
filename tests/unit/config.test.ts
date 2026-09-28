@@ -53,6 +53,13 @@ describe('keybindings', () => {
     expect(resolveKeyAction(key('c', { ctrlKey: true }))).toBeNull();
   });
 
+  it('maps the 3D Object Lab keys: copy, delete (Delete or Backspace), group', () => {
+    expect(resolveKeyAction(key('d'))).toEqual({ type: 'duplicate' });
+    expect(resolveKeyAction(key('Delete'))).toEqual({ type: 'delete' });
+    expect(resolveKeyAction(key('Backspace'))).toEqual({ type: 'delete' });
+    expect(resolveKeyAction(key('G'))).toEqual({ type: 'group' });
+  });
+
   it('maps filter and depth keys', () => {
     expect(resolveKeyAction(key('ArrowRight'))).toEqual({ type: 'filterNext' });
     expect(resolveKeyAction(key('['))).toEqual({ type: 'filterPrev' });

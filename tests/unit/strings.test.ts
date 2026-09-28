@@ -2,7 +2,6 @@
 // the experience driven frame by frame — including a heap-sampling check that its per-frame work
 // allocates nothing (the spec's "zero per-frame allocations").
 
-import { Session } from 'node:inspector/promises';
 import type * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TUNING } from '@/config/tuning';
@@ -23,7 +22,7 @@ import {
   THUMB_TIP,
   WRIST,
 } from '@/vision/landmarks';
-import { ModeRig, pipelineRig } from '../fixtures/modeHarness';
+import { allocationsPerFrame, ModeRig, pipelineRig } from '../fixtures/modeHarness';
 import { waveScenario } from '../fixtures/syntheticHands';
 
 const S = TUNING.strings;
@@ -230,13 +229,10 @@ describe('StringsMode', () => {
 });
 
 describe('StringsMode allocates nothing per frame (heap sampling, real hand pipeline)', () => {
-  // V8's sampling heap profiler, told to keep objects that were already garbage-collected (by
-  // default it reports only survivors, which hides per-frame garbage), attributes each allocation
-  // to a call stack. Counted: everything allocated while Strings code is on the stack, including
-  // library calls it makes (a `new THREE.Vector3()` is charged to three.js's constructor). The
-  // engine can still box a few numbers while it re-optimises a function once (seen: 2–9 B / frame
-  // in one window), so two windows are measured and the lower counts: a real per-frame
-  // allocation is in both (one small object per frame ≈ 16–48 B / frame), a one-off blip isn't.
+  // allocationsPerFrame (modeHarness) counts what Strings code allocates, library calls included.
+  // The engine can still box a few numbers while it re-optimises a function once (seen: 2–9 B /
+  // frame in one window), so the lower of two windows counts: a real per-frame allocation is in
+  // both (one small object per frame ≈ 16–48 B / frame), a one-off blip isn't.
   const BUDGET_PER_FRAME = 13; // bytes
 
   it('3,000 frames of two waving hands: under 13 bytes per frame from the Strings code', async () => {
@@ -244,41 +240,13 @@ describe('StringsMode allocates nothing per frame (heap sampling, real hand pipe
     const mode = app.mc.activeMode as StringsMode;
     app.mc.handleAction({ type: 'stringsStyle', style: 'mesh' });
     app.mc.handleAction({ type: 'stringsTrails', trails: 'long' });
-    for (let i = 0; i < 6; i++) app.play(waveScenario()); // warm up: let the JIT optimise first
-    const session = new Session();
-    session.connect();
-    await session.post('HeapProfiler.enable');
-
-    const measure = async (): Promise<{ perFrame: number; detail: string }> => {
+    const window = (): number => {
       let frames = 0;
-      await session.post('HeapProfiler.startSampling', {
-        samplingInterval: 128,
-        includeObjectsCollectedByMajorGC: true,
-        includeObjectsCollectedByMinorGC: true,
-      });
       for (let i = 0; i < 12; i++) app.play(waveScenario(), () => frames++); // 12 × 4.3 s
-      const { profile } = await session.post('HeapProfiler.stopSampling');
-      expect(frames).toBeGreaterThan(3000);
-      type Node = typeof profile.head;
-      const ours: string[] = [];
-      let bytes = 0;
-      const walk = (n: Node, inside: boolean): void => {
-        const here = inside || /modes\/strings\//.test(n.callFrame.url);
-        if (here && n.selfSize > 0) {
-          ours.push(`${n.callFrame.functionName || '(anonymous)'} ${n.selfSize} B`);
-          bytes += n.selfSize;
-        }
-        for (const c of n.children) walk(c, here);
-      };
-      walk(profile.head, false);
-      return { perFrame: bytes / frames, detail: ours.join(', ') };
+      return frames;
     };
-
-    const first = await measure();
-    const second = await measure();
-    session.disconnect();
+    const best = await allocationsPerFrame(/modes\/strings\//, window, 1);
     expect(mode.threadSegments).toBeGreaterThan(0);
-    const best = first.perFrame <= second.perFrame ? first : second;
-    expect(best.perFrame, `${first.detail} | ${second.detail}`).toBeLessThan(BUDGET_PER_FRAME);
+    expect(best.perFrame, best.detail).toBeLessThan(BUDGET_PER_FRAME);
   });
 });

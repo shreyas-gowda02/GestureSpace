@@ -3,7 +3,7 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-28, Phase 10 (Filter Lab + Portal)._
+_Last updated: 2026-09-28, Phase 11 (3D Object Lab)._
 
 | Key | Experience          | Status                                                                  |
 | --- | ------------------- | ----------------------------------------------------------------------- |
@@ -13,7 +13,7 @@ _Last updated: 2026-09-28, Phase 10 (Filter Lab + Portal)._
 | 4   | Hand Strings        | ✅ Ready (glowing joints, elastic threads, fingertip trails, 3 styles)  |
 | 5   | Filter Lab          | ✅ Ready (a lens strip with 13 camera filters; live / frozen / picture) |
 | 6   | Portal / Dimensions | ✅ Ready (a portal into 4 worlds; opens out of a glowing line)          |
-| 7   | 3D Object Lab       | 🚧 Placeholder — coming in Phase 11                                     |
+| 7   | 3D Object Lab       | ✅ Ready (make shapes, move / turn / resize / spin, copy, group, undo)  |
 
 ---
 
@@ -54,17 +54,17 @@ actions (depth dial, eraser fist). There's no left-handed setting yet (Phase 12)
 These are the building blocks every experience uses. Check the **status bar** to see what the app
 thinks each hand is doing; that's the first thing to look at when something doesn't react.
 
-| Gesture            | How to make it                                                      | Status bar shows |
-| ------------------ | ------------------------------------------------------------------- | ---------------- |
-| **Open hand**      | Fingers spread, relaxed                                             | `open`           |
-| **Pinch**          | Thumb tip and index fingertip touching                              | `pinch`          |
-| **Point**          | Index finger straight out, the other three fingers curled           | `point`          |
-| **Fist**           | All four fingers curled into the palm (the thumb can stay out)      | `grab`           |
-| **Two-hand ✓**     | Both hands pinching at the same time                                | `Two-hand ✓`     |
-| **Thumb-pinky**    | Thumb tip touching the little-finger tip (used by Filter Lab later) | `thumb-pinky`    |
-| (seen, no gesture) | Any other hand shape                                                | `hand`           |
-| (just lost)        | The hand left the picture less than 0.15 s ago                      | `lost…`          |
-| (not seen)         | No hand                                                             | `—`              |
+| Gesture            | How to make it                                                 | Status bar shows |
+| ------------------ | -------------------------------------------------------------- | ---------------- |
+| **Open hand**      | Fingers spread, relaxed                                        | `open`           |
+| **Pinch**          | Thumb tip and index fingertip touching                         | `pinch`          |
+| **Point**          | Index finger straight out, the other three fingers curled      | `point`          |
+| **Fist**           | All four fingers curled into the palm (the thumb can stay out) | `grab`           |
+| **Two-hand ✓**     | Both hands pinching at the same time                           | `Two-hand ✓`     |
+| **Thumb-pinky**    | Thumb tip touching the little-finger tip (Filter Lab, Portal)  | `thumb-pinky`    |
+| (seen, no gesture) | Any other hand shape                                           | `hand`           |
+| (just lost)        | The hand left the picture less than 0.15 s ago                 | `lost…`          |
+| (not seen)         | No hand                                                        | `—`              |
 
 Tips:
 
@@ -85,12 +85,15 @@ Tips:
 | **C**                  | Clear the current experience (undoable; nothing in the Panel; Strings: settle) |
 | **R**                  | Reset view / position of the current experience (Strings: settle the threads)  |
 | **X**                  | Switch tool: Build ↔ Erase (Voxel) · Pen ↔ Eraser (Air Draw)                   |
-| **Q / E**              | Voxel Builder: depth layer − / +                                               |
+| **Q / E**              | Voxel Builder: depth layer − / + · 3D Object Lab: farther / nearer             |
 | **L**                  | Voxel Builder: Depth Lock on / off                                             |
 | **`** (backtick)       | Debug panel (left of the 1 key)                                                |
-| **Esc**                | Close panels and drop whatever a hand is holding                               |
+| **Esc**                | Close panels and drop whatever a hand is holding (3D Object Lab: deselect)     |
 | **← / →** or **[ / ]** | Filter Lab: previous / next filter · Portal: previous / next world             |
-| H, D, Delete           | Reserved for later phases (Help, 3D Object Lab)                                |
+| **D**                  | 3D Object Lab: copy the selection                                              |
+| **Delete / Backspace** | 3D Object Lab: delete the selection                                            |
+| **G**                  | 3D Object Lab: group the selection (or ungroup a group)                        |
+| H                      | Reserved for Help (Phase 12)                                                   |
 
 Switching experiences keeps what you made in each one, including its undo history. Anything a
 hand is holding at that moment is let go first.
@@ -529,16 +532,129 @@ Switch with the tool panel buttons, **← / →** (or **[ / ]**), or a **thumb-t
 
 ---
 
-## 10. Experiences still to come (placeholders for now)
+## 10. 3D Object Lab (key 7)
 
-Each unbuilt experience currently shows a **spinning shape**. Point at it (your cursor ring turns
-white) and **pinch to grab and drag it**; let go to drop it. This checks the hand controls work
-before the real experience arrives. Planned controls (subject to change; this file will be updated
-when each is built):
+Make 3D shapes and arrange them in the air: pick them up, move them nearer or farther, turn,
+resize and spin them, copy, group and delete them.
 
-- **7 · 3D Object Lab (Phase 11):** hold an open palm for a spawn menu (cube, sphere, cylinder,
-  plane, torus), point + pinch to select, pinch + drag to move, two hands to rotate / scale,
-  D to duplicate, Delete to delete.
+### What you see
+
+- Shapes floating in front of the camera: **cube, sphere, cylinder, plane** (a thin square card)
+  and **donut**. Each is about 3 units across (≈ a sixth of the picture's height) and starts turned
+  a little, so its 3D shape shows.
+- Point at a shape: it **glows a little** and a **faint white box** frames it (your cursor ring
+  also turns white).
+- **Selected** shapes glow more and get an **amber box**.
+- New shapes **pop in**.
+
+### Making shapes
+
+Two ways:
+
+- **Tool panel → Add a shape:** Cube / Sphere / Cylinder / Plane / Donut. It appears in the middle
+  (or steps aside if something's already there) and is selected.
+- **The shape menu:** hold your **right hand open and still** (fingers spread) for **0.6 s**. A
+  ring fills round your fingertip (it shows after 0.2 s), then a **ring of the five shapes** opens
+  there, drawn in the current colour.
+  - **Point at a shape** in the ring (it grows, with its name underneath) and **pinch**. The new
+    shape appears **under your fingertip, already held**: move it where you want it and let go.
+  - A pinch **anywhere else** (the ✕ in the middle, or away from the shapes) closes the menu and
+    makes nothing.
+  - Left alone, it closes after **5 s**.
+  - Moving the open hand while the ring fills starts the wait again, so just passing an open hand
+    through doesn't open it.
+  - After the menu closes, close your hand (or lower it) before it can open again.
+
+### Selecting
+
+| Do this                                                        | What happens                                                                                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Point at a shape and pinch**                                 | It becomes the selection (other shapes are deselected) and you hold it. Already selected? The whole selection comes along |
+| **Pinch empty space and let go** without moving                | Nothing is selected any more                                                                                              |
+| **Add to selection: on** (tool panel), then pinch              | Shapes are **added** to the selection instead of replacing it                                                             |
+| …with it on, **tap** (pinch, let go, no move) a selected shape | That shape is dropped from the selection                                                                                  |
+| **Esc**                                                        | Nothing selected (and the shape menu closes)                                                                              |
+
+A "tap" is a pinch that moves less than about 14 px (2% of the screen's height).
+
+A shape in a **group** can't be picked on its own: pointing at any of its shapes picks the whole
+group (see Groups below).
+
+### Moving: pinch and drag
+
+- **Pinch a shape and move your hand:** the selection follows, the exact spot you pinched staying
+  **under your fingertip**. With several shapes selected, they all move together.
+- **Nearer / farther:** while holding, **pull your hand toward the camera** to bring it nearer,
+  **push it away** to send it farther. It moves in steps of 2 units: about an 8% change in how big
+  your hand looks per step, with a small dead zone so an unsteady hand doesn't drift. This isn't
+  tuned on real hands yet; say if it feels too sensitive or too slow.
+- **Q / E** do the same by key: one step farther / nearer, while holding or with shapes selected
+  (they stay at the same spot on screen and just get smaller / bigger).
+- Shapes stay between **6 and 60 units** from the camera. The camera sits 20 units in front of the
+  middle.
+- Let go to drop. **Ctrl+Z** undoes the whole move.
+
+### Turning and resizing with two hands
+
+- **Pinch with both hands** (anywhere, or on the shape): the selection is held between your hands.
+  - **Spread / close** your hands to make it **bigger / smaller**.
+  - **Tilt the line between your hands** to **turn** it.
+  - **Move both hands** to move it.
+- It works like the Voxel Builder's two-hand grab: no jump when you start, and each pinch stays on
+  the same spot. So pinching **on or around** the shape works best; hands far to one side move it
+  a lot as it grows.
+- Nothing selected? Both pinches on a shape select it first.
+- Size limits: one grab can make it up to 5× bigger or 5× smaller, and a shape never goes below
+  **0.2×** or above **6×** the size it was made at.
+- A hand lost mid-grab freezes it until the hand is back. **Ctrl+Z** undoes the whole grab.
+
+### Spinning in 3D: fist + drag
+
+With shapes selected, **make a fist and move it**:
+
+- **Left / right** spins them round.
+- **Up / down** tips them toward / away from you.
+
+They spin about their own middle. It starts once the fist has been held **0.15 s** and moved a
+little (about 22 px), so a relaxed hand doesn't spin anything. Open your hand to stop. One undo
+step.
+
+### Copy, delete, groups, reset
+
+| Control                                         | Does                                                                                                  |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **D** or **Copy**                               | Copies the selection, 1 unit right and down; the copies become the selection                          |
+| **Delete** / **Backspace** or **Delete** button | Deletes the selection                                                                                 |
+| **G** or **Group** (2+ selected)                | Joins them into one **group**: it moves, turns and spins as one                                       |
+| **G** (one group selected) or **Ungroup**       | Splits the group back into its shapes, which stay exactly where they are                              |
+| **R** or **Reset turn & size**                  | Turns the selection back upright and to its made size, **where it is**. Nothing selected: every shape |
+| **C** or **Clear**                              | Removes every shape                                                                                   |
+
+Everything here is **one undo step** (Ctrl+Z / Ctrl+Shift+Z).
+
+### Colour and look (tool panel)
+
+- **Colour:** 8 colours (the same as the Voxel Builder).
+- **Look:** **Solid**, **Glow** (lit by its own colour) or **Glass** (see-through).
+- These set the colour and look of **new shapes**. With shapes selected, they **also change the
+  selection** (one undo step: "Recolour" / "Change look").
+- The panel also shows how many objects there are and how many are selected. A group counts as
+  one.
+
+### Status messages
+
+| Message                                                                                    | Meaning                      |
+| ------------------------------------------------------------------------------------------ | ---------------------------- |
+| Hold your hand open and still for the shape menu — or pick a shape in the tool panel       | No shapes yet                |
+| Point at a shape and pinch to pick it up · hold your hand open for the shape menu          | Shapes, none selected        |
+| 1 shape selected — pinch to move · both hands turn / resize · fist spins · D copy · Delete | Something is selected        |
+| Keep your hand open and still — the shape menu is opening…                                 | The ring is filling          |
+| Shape menu — point at a shape and pinch to make it (pinch anywhere else to close)          | The menu is open             |
+| Moving — push / pull your hand (or Q / E) for nearer / farther; let go to drop             | Holding shapes with one hand |
+| Let go to deselect                                                                         | Pinching empty space         |
+| Turning / resizing — let go of both pinches to drop                                        | Holding with both hands      |
+| Hand lost — the selection holds still until it is back                                     | A hand left mid-grab         |
+| Spinning in 3D — move your fist; open your hand to stop                                    | Fist spin                    |
 
 ---
 
@@ -574,6 +690,11 @@ Press **`** (backtick) or click **Debug**.
 
 ## Changelog of controls
 
+- **2026-09-28** — **3D Object Lab built**: make shapes from the tool panel or an open-hand ring
+  menu; point + pinch to select and move (push / pull or Q / E for depth); both hands turn /
+  resize; fist + drag spins; Add to selection; D copy, Delete / Backspace delete, G group /
+  ungroup, R reset turn & size, C clear; colour and look; all undoable. New keys: **D**,
+  **Delete / Backspace**, **G**; Q / E and Esc do more. No experiences are placeholders any more.
 - **2026-09-28** — **Filter Lab built** (a lens strip over the camera, 13 filters, thumb-pinky /
   arrow keys / buttons, live / frozen / picture / your own picture, width-only stretch) and
   **Portal built** (opens out of a glowing line; Nebula, Other World, Inverted Reality, Picture;

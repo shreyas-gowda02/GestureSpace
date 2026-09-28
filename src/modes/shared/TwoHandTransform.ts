@@ -2,7 +2,7 @@
 //  TwoHandTransform (§12) — hold something with both hands: move / turn / resize it in the
 //    screen's plane. Voxel (the whole structure), Panel, Filter Lab, Portal, Object Lab.
 //  FistOrbit — make a fist and drag to turn it in 3D (spin round / tip), like a mouse drag in a
-//    3D viewer. Voxel (the whole structure); Object Lab later.
+//    3D viewer. Voxel (the whole structure), Object Lab (the selection).
 // TwoHandTransform:
 //  • No jump: when the grab starts, the object's pose and the hands' midpoint / spread / angle are
 //    the baseline; after that the object scales and turns about the hands' midpoint and follows it.
@@ -25,7 +25,6 @@ import type {
 } from '@/core/types';
 import type { ReleaseReason } from '@/spatial/CaptureManager';
 import { InteractionPlane } from '@/spatial/CoordinateMapper';
-import { clamp } from '@/utils/math';
 import { INDEX_MCP, MIDDLE_MCP, PINKY_MCP, RING_MCP, WRIST } from '@/vision/landmarks';
 import type { ModeContext } from '../types';
 
@@ -78,7 +77,7 @@ export function transformCommand(
   return { label, do: () => applyPose(object, a), undo: () => applyPose(object, b) };
 }
 
-const clonePose = (p: Pose): Pose => ({
+export const clonePose = (p: Pose): Pose => ({
   position: p.position.clone(),
   quaternion: p.quaternion.clone(),
   scale: p.scale.clone(),
@@ -87,7 +86,7 @@ const clonePose = (p: Pose): Pose => ({
 /** 0 when the hands (nearly) touch → 1 once they're clearly apart. */
 export function turnWeight(distance: number): number {
   const { none, full } = T.turnFade;
-  return clamp((distance - none) / (full - none), 0, 1);
+  return Math.min(1, Math.max(0, (distance - none) / (full - none)));
 }
 
 export interface TwoHandTransformOptions {
@@ -101,6 +100,11 @@ export interface TwoHandTransformOptions {
   widthOnly?: boolean;
   /** Called once when a grab ends, however it ends (after its undo step is recorded). */
   onEnd?: (reason: ReleaseReason) => void;
+  /**
+   * Builds the grab's undo step (null = nothing to undo) instead of moving `object` back — for an
+   * object that stands in for others (Object Lab moves the selected items through one handle).
+   */
+  command?: () => Command | null;
 }
 
 export class TwoHandTransform {
@@ -179,15 +183,26 @@ export class TwoHandTransform {
       this.anchor(two); // the returning hand may have moved: carry on from here, no jump
       return;
     }
+    // Math.min / max rather than helper calls: decimals passed to a call that isn't inlined get
+    // boxed on the heap, every frame (heap sampling, Object Lab).
     const dt = frame.dt;
     this.targetTurn += (two.rotation - this.lastRotation) * turnWeight(two.distance);
     this.lastRotation = two.rotation;
     const turnStep = T.maxTurnRate * dt;
-    this.turn += clamp(this.targetTurn - this.turn, -turnStep, turnStep);
-    const ratio = clamp(Math.max(two.distance, T.minSpan) / this.baseSpan, T.minScale, T.maxScale);
+    this.turn += Math.min(turnStep, Math.max(-turnStep, this.targetTurn - this.turn));
+    const spread = Math.max(two.distance, T.minSpan) / this.baseSpan;
+    const ratio = Math.min(T.maxScale, Math.max(T.minScale, spread));
     const scaleStep = T.maxScaleRate * dt;
-    this.logScale += clamp(Math.log(ratio) - this.logScale, -scaleStep, scaleStep);
-    this.follow(two.center, T.maxMoveRate * dt, ctx.viewport.videoAspect);
+    this.logScale += Math.min(scaleStep, Math.max(-scaleStep, Math.log(ratio) - this.logScale));
+    // Follow the hands' midpoint, at most maxMoveRate view heights per second.
+    const aspect = ctx.viewport.videoAspect;
+    const maxStep = T.maxMoveRate * dt;
+    const dx = (two.center.x - this.view.x) * aspect;
+    const dy = two.center.y - this.view.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const k = d > maxStep ? maxStep / d : 1;
+    this.view.x += (dx * k) / aspect;
+    this.view.y += dy * k;
     this.apply();
   }
 
@@ -204,9 +219,12 @@ export class TwoHandTransform {
     this.lost = false;
     this.ctx = null;
     readPose(this.object, this.after);
-    if (ctx && !samePose(this.before, this.after)) {
-      ctx.history.push(transformCommand(this.object, this.before, this.after, this.opts.label));
-    }
+    const cmd = this.opts.command
+      ? this.opts.command()
+      : samePose(this.before, this.after)
+        ? null
+        : transformCommand(this.object, this.before, this.after, this.opts.label);
+    if (ctx && cmd) ctx.history.push(cmd);
     this.opts.onEnd?.(reason);
   };
 
@@ -221,16 +239,6 @@ export class TwoHandTransform {
     this.targetTurn = this.turn = this.logScale = 0;
   }
 
-  /** Move the followed midpoint toward the hands' midpoint, at most `maxStep` view heights. */
-  private follow(target: Vec2, maxStep: number, aspect: number): void {
-    const dx = (target.x - this.view.x) * aspect;
-    const dy = target.y - this.view.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    const k = d > maxStep ? maxStep / d : 1;
-    this.view.x += (dx * k) / aspect;
-    this.view.y += dy * k;
-  }
-
   /** Scale and turn about the hands' midpoint, and follow it. */
   private apply(): void {
     if (!this.project(this.view, this.center)) return;
@@ -238,7 +246,7 @@ export class TwoHandTransform {
     const range = this.opts.scaleRange;
     const baseSize = base.scale.x;
     let size = baseSize * Math.exp(this.logScale);
-    if (range) size = clamp(size, range.min, range.max);
+    if (range) size = Math.min(range.max, Math.max(range.min, size));
     const k = size / baseSize;
     // View y points down, scene y up: a clockwise hand line is a negative turn about the axis.
     this.q.setFromAxisAngle(this.axis, -this.turn * T.ROTATION_SENSITIVITY);
@@ -269,8 +277,8 @@ export function palmCenterInto(out: Vec2, hand: TrackedHand): Vec2 {
   let x = 0;
   let y = 0;
   let n = 0;
-  for (const i of PALM) {
-    const p = lms[i];
+  for (let k = 0; k < PALM.length; k++) {
+    const p = lms[PALM[k] ?? WRIST]; // indexed: for…of made an iterator per call (heap sampling)
     if (!p) continue;
     x += p.x;
     y += p.y;
@@ -290,6 +298,8 @@ export interface FistOrbitOptions {
   id: string;
   /** Undo step label. */
   label: string;
+  /** Builds the turn's undo step instead of turning `object` back (see TwoHandTransformOptions). */
+  command?: () => Command | null;
 }
 
 /**
@@ -388,7 +398,9 @@ export class FistOrbit {
     const aspect = ctx.viewport.videoAspect;
     palmCenterInto(this.palm, hand);
     if (!this.armed) {
-      const moved = Math.hypot(this.palm.x * aspect - this.start.x, this.palm.y - this.start.y);
+      const mx = this.palm.x * aspect - this.start.x;
+      const my = this.palm.y - this.start.y;
+      const moved = Math.sqrt(mx * mx + my * my);
       if (frame.timestamp - this.closedAt < O.holdMs || moved < O.deadZone) return;
       this.armed = true;
       this.anchor(hand); // turning starts from here: the dead zone never shows as a jump
@@ -397,8 +409,8 @@ export class FistOrbit {
     const yaw = (this.palm.x * aspect - this.start.x) * O.radPerViewHeight;
     const pitch = (this.palm.y - this.start.y) * O.radPerViewHeight;
     const step = O.maxTurnRate * frame.dt;
-    this.yaw += clamp(yaw - this.yaw, -step, step);
-    this.pitch += clamp(pitch - this.pitch, -step, step);
+    this.yaw += Math.min(step, Math.max(-step, yaw - this.yaw));
+    this.pitch += Math.min(step, Math.max(-step, pitch - this.pitch));
     this.apply();
   }
 
@@ -420,9 +432,12 @@ export class FistOrbit {
     this.armed = false;
     this.ctx = null;
     readPose(this.object, this.after);
-    if (ctx && !samePose(this.before, this.after)) {
-      ctx.history.push(transformCommand(this.object, this.before, this.after, this.opts.label));
-    }
+    const cmd = this.opts.command
+      ? this.opts.command()
+      : samePose(this.before, this.after)
+        ? null
+        : transformCommand(this.object, this.before, this.after, this.opts.label);
+    if (ctx && cmd) ctx.history.push(cmd);
   };
 
   private anchor(hand: TrackedHand): void {

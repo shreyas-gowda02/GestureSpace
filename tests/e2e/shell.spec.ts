@@ -264,3 +264,37 @@ test('portal: every world switches without errors; Reset shuts it', async ({ pag
   await page.getByRole('button', { name: /Reset portal/ }).click();
   expect(errors).toEqual([]);
 });
+
+test('3D object lab: make every shape; copy, delete, colour, look, clear and undo', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const errors = await openWithCamera(page);
+  const pressed = (name: string) =>
+    expect(page.getByRole('button', { name, exact: true })).toHaveAttribute('aria-pressed', 'true');
+  const count = page.locator('.gs-toolpanel__count');
+  await page.keyboard.press('7');
+  await expect(count).toHaveText('0 objects · 0 selected');
+  for (const name of ['Cube', 'Sphere', 'Cylinder', 'Plane', 'Donut']) {
+    await page.getByRole('button', { name, exact: true }).click();
+  }
+  await expect(count).toHaveText('5 objects · 1 selected');
+  await page.keyboard.press('d');
+  await expect(count).toHaveText('6 objects · 1 selected');
+  await page.getByRole('button', { name: 'Magenta', exact: true }).click();
+  await pressed('Magenta');
+  await page.getByRole('button', { name: 'Glass', exact: true }).click();
+  await pressed('Glass');
+  await page.getByRole('button', { name: 'Add to selection: off' }).click();
+  await expect(page.getByRole('button', { name: 'Add to selection: on' })).toBeVisible();
+  await page.keyboard.press('Delete');
+  await expect(count).toHaveText('5 objects · 0 selected');
+  await expect(page.getByRole('button', { name: /^Copy/ })).toBeDisabled();
+  await page.keyboard.press('Control+z');
+  await expect(count).toHaveText('6 objects · 0 selected');
+  await page.keyboard.press('c');
+  await expect(count).toHaveText('0 objects · 0 selected');
+  await page.keyboard.press('Control+z');
+  await expect(count).toHaveText('6 objects · 0 selected');
+  expect(errors).toEqual([]);
+});

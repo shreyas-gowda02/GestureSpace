@@ -1,5 +1,5 @@
-// Shared scene visuals: default lighting, the per-hand 3D cursor marker and hover highlighting.
-// (Selection outlines for the 3D Object Lab join this file in Phase 11.)
+// Shared scene visuals: default lighting and the per-hand 3D cursor marker.
+// (The 3D Object Lab draws its own hover / selection boxes: modes/objectLab/objects.ts.)
 
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
@@ -79,19 +79,4 @@ export class CursorMarker {
     this.ringMat.dispose();
     this.dotMat.dispose();
   }
-}
-
-/** Toggle an emissive glow on MeshStandardMaterials under `root` (hover / grab feedback). */
-export function setHighlight(
-  root: THREE.Object3D,
-  amount: number,
-  color: THREE.ColorRepresentation,
-): void {
-  root.traverse((o) => {
-    const m = (o as Partial<THREE.Mesh>).material;
-    if (m instanceof THREE.MeshStandardMaterial) {
-      m.emissive.set(color);
-      m.emissiveIntensity = amount;
-    }
-  });
 }
