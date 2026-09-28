@@ -369,6 +369,18 @@ export const TUNING = {
      * counts, so a flicker neither ends the erase nor lets a stray line start.
      */
     fistGraceMs: 150,
+    /**
+     * A line starts only once the index finger has stayed out (pointing) this long (D57, the
+     * user's request: a line began the moment the finger came out). The finger may move meanwhile;
+     * the line starts wherever the fingertip is when the wait ends. Lowering the finger earlier
+     * draws nothing. Every line waits; the erasers don't. 0 = draw at once.
+     */
+    penHoldMs: 3000,
+    /**
+     * The ring that fills round the fingertip during that wait: shown after `showAfterMs` (a brief
+     * accidental point doesn't flash it), radius in video heights (≈ 25 px at 720p), line width px.
+     */
+    penHoldRing: { showAfterMs: 150, radius: 0.035, lineWidth: 4 },
     /** The stroke the eraser would remove: a red halo (px wider than the line) + a dashed line. */
     eraseHighlight: { color: '#ff5470', alpha: 0.4, pad: 10, dash: [8, 6] },
     /**

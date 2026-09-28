@@ -435,6 +435,28 @@ export class StrokeRenderer {
     ctx.restore();
   }
 
+  /** The wait before a line starts (D57): a ring round the fingertip, `k` (0–1) of it filled. */
+  drawHoldRing(ctx: Canvas2D, viewport: ViewportMapper, at: Vec2, k: number, color: string): void {
+    this.viewport = viewport;
+    const p = this.map(at.x, at.y, P0);
+    const R = D.penHoldRing;
+    const r = R.radius * StrokeRenderer.pxPerUnit(viewport);
+    const top = -Math.PI / 2;
+    ctx.save();
+    ctx.lineWidth = R.lineWidth;
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.95;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, top, top + Math.min(1, k) * Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   dispose(): void {
     if (this.cache) {
       this.cache.canvas.width = 0;

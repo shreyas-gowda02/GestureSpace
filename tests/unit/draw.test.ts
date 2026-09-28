@@ -261,7 +261,10 @@ function tipAt(rig: ModeRig, p: Vec2, side: HandSide = 'right'): void {
   rig.show(side, p.x, p.y);
 }
 
-/** Point at the first point, move the fingertip through the rest (one frame each), lower it. */
+/** Keep the finger out until the pen's wait is over (D57): the line starts on this frame. */
+const waitOut = (rig: ModeRig): void => rig.step(D.penHoldMs);
+
+/** Point at the first point, wait for the pen, move through the rest (one frame each), lower it. */
 function drawPath(rig: ModeRig, path: readonly Vec2[], side: HandSide = 'right'): void {
   const [first, ...rest] = path;
   if (!first) return;
@@ -269,6 +272,7 @@ function drawPath(rig: ModeRig, path: readonly Vec2[], side: HandSide = 'right')
   rig.step();
   rig.point(side, true);
   rig.step();
+  waitOut(rig);
   for (const p of rest) {
     tipAt(rig, p, side);
     rig.step();
@@ -317,6 +321,7 @@ describe('DrawMode (§15, point to draw — D48)', () => {
     rig.step();
     rig.point('right', true);
     rig.step();
+    waitOut(rig);
     for (const p of line(20, { x: 0.3, y: 0.5 }, { x: 0.6, y: 0.5 })) {
       tipAt(rig, { x: p.x + 0.01, y: 0.56 }); // a prediction overshooting a turn…
       rig.step(1000 / 60, false);
@@ -387,9 +392,11 @@ describe('DrawMode (§15, point to draw — D48)', () => {
     rig.frame.gestures.twoHand.active = true;
     rig.point('right', true);
     rig.step();
+    waitOut(rig);
     tipAt(rig, { x: 0.6, y: 0.5 });
     rig.step();
     expect(mode.strokeList).toHaveLength(0);
+    expect(mode.penWait).toBeNull();
     expect(rig.base.capture.count).toBe(0);
   });
 
@@ -399,6 +406,7 @@ describe('DrawMode (§15, point to draw — D48)', () => {
     rig.step();
     rig.point('right', true);
     rig.step();
+    waitOut(rig);
     tipAt(rig, { x: 0.4, y: 0.3 });
     rig.step();
     rig.base.capture.release('right', 'lost'); // what Core does when the hand disappears
@@ -409,6 +417,7 @@ describe('DrawMode (§15, point to draw — D48)', () => {
     rig.step();
     rig.point('right', true);
     rig.step();
+    waitOut(rig);
     rig.mc.switchTo('voxel');
     expect(mode.strokeList).toHaveLength(2);
     expect(rig.base.capture.count).toBe(0);
@@ -420,6 +429,7 @@ describe('DrawMode (§15, point to draw — D48)', () => {
     rig.step();
     rig.point('right', true);
     rig.step();
+    waitOut(rig);
     rig.base.capture.swapSides();
     rig.mc.swapSides();
     rig.frame.gestures.left = rig.frame.gestures.right;
@@ -472,11 +482,14 @@ describe('DrawMode: a fist with the other hand is the eraser (D49)', () => {
     tipAt(rig, { x: 0.1, y: 0.9 });
     rig.step();
     rig.grab('left', false);
+    rig.step(D.fistGraceMs + 1);
+    waitOut(rig); // not even after the pen's wait
     for (const p of line(10, { x: 0.1, y: 0.9 }, { x: 0.3, y: 0.9 })) {
       tipAt(rig, p);
       rig.step();
     }
     expect(mode.strokeList).toHaveLength(2); // still pointing from the erase: no new line
+    expect(mode.penWait).toBeNull();
     rig.point('right', false);
     rig.step();
     drawPath(rig, line(10, { x: 0.6, y: 0.9 }, { x: 0.8, y: 0.9 })); // a fresh point draws
@@ -489,6 +502,8 @@ describe('DrawMode: a fist with the other hand is the eraser (D49)', () => {
     tipAt(rig, { x: 0.2, y: 0.4 });
     rig.step();
     rig.point('right', true);
+    rig.step();
+    waitOut(rig);
     for (const p of line(15, { x: 0.2, y: 0.4 }, { x: 0.5, y: 0.4 })) {
       tipAt(rig, p);
       rig.step();
@@ -532,5 +547,147 @@ describe('DrawMode: a fist with the other hand is the eraser (D49)', () => {
     tipAt(rig, { x: 0.35, y: 0.6 });
     rig.step();
     expect(mode.strokeList).toHaveLength(2);
+  });
+});
+
+describe('DrawMode: the finger stays out 3 s before a line starts (D57)', () => {
+  it('pointing and moving for less than the wait draws nothing; the line starts where the fingertip is then', () => {
+    const { rig, mode } = drawRig();
+    tipAt(rig, { x: 0.2, y: 0.5 });
+    rig.step();
+    rig.point('right', true);
+    const frames = Math.floor((D.penHoldMs - 50) / (1000 / 60));
+    for (const p of line(frames, { x: 0.2, y: 0.5 }, { x: 0.5, y: 0.3 })) {
+      tipAt(rig, p); // moving about with the finger out, as when getting into position
+      rig.step();
+    }
+    expect(mode.strokeList).toHaveLength(0);
+    expect(mode.penWait).toBeGreaterThan(0.95);
+    expect(mode.penWait).toBeLessThan(1);
+    expect(rig.statuses.at(-1)).toMatch(/line starts in 1 s/);
+    rig.run(6); // the wait ends (100 ms later) with the fingertip at (0.5, 0.3)
+    for (const p of line(20, { x: 0.5, y: 0.3 }, { x: 0.7, y: 0.3 })) {
+      tipAt(rig, p);
+      rig.step();
+    }
+    rig.point('right', false);
+    rig.step();
+    expect(mode.strokeList).toHaveLength(1);
+    const s = mode.strokeList[0];
+    expect(s?.points[0]).toBeCloseTo(0.5, 3); // not where the finger first came out
+    expect(s?.points[1]).toBeCloseTo(0.3, 3);
+    expect(s?.maxX).toBeGreaterThan(0.69);
+  });
+
+  it('lowering the finger before the wait is over draws nothing, and the next point waits from zero', () => {
+    const { rig, mode } = drawRig();
+    rig.step();
+    rig.point('right', true);
+    rig.step();
+    rig.step(D.penHoldMs - 200);
+    rig.point('right', false);
+    rig.step();
+    expect(mode.penWait).toBeNull();
+    expect(rig.base.capture.count).toBe(0);
+    rig.point('right', true);
+    rig.step();
+    expect(mode.penWait).toBe(0);
+    rig.step(D.penHoldMs - 200);
+    expect(mode.strokeList).toHaveLength(0);
+    rig.step(200); // the full wait: the pen is down
+    tipAt(rig, { x: 0.8, y: 0.5 });
+    rig.step();
+    rig.point('right', false);
+    rig.step();
+    expect(mode.strokeList).toHaveLength(1);
+  });
+
+  it('every line waits: after a line, pointing again draws only after the full wait', () => {
+    const { rig, mode } = drawRig();
+    drawPath(rig, line(10, { x: 0.2, y: 0.3 }, { x: 0.4, y: 0.3 }));
+    tipAt(rig, { x: 0.2, y: 0.6 });
+    rig.point('right', true);
+    rig.step();
+    for (const p of line(60, { x: 0.2, y: 0.6 }, { x: 0.6, y: 0.6 })) {
+      tipAt(rig, p); // one second of moving with the finger out
+      rig.step();
+    }
+    expect(mode.strokeList).toHaveLength(1);
+    expect(rig.base.capture.get('right')?.targetId).toBe('draw-wait');
+  });
+
+  it('the ring fills round the fingertip; a brief point shows no ring', () => {
+    const { rig, mode } = drawRig();
+    const arcs: number[] = [];
+    const c2d = new Proxy(
+      {},
+      {
+        get: (_t, key) =>
+          key === 'arc'
+            ? (_x: number, _y: number, _r: number, a0: number, a1: number) => arcs.push(a1 - a0)
+            : () => {},
+        set: () => true,
+      },
+    ) as CanvasRenderingContext2D;
+    const partial = (): number[] => {
+      arcs.length = 0;
+      mode.drawOverlay(c2d);
+      return arcs.filter((a) => a > 1e-6 && a < Math.PI * 2 - 1e-6);
+    };
+    rig.point('right', true);
+    rig.step();
+    expect(partial()).toHaveLength(0); // too soon for a ring
+    rig.step(D.penHoldMs / 2);
+    const ring = partial();
+    expect(ring).toHaveLength(1);
+    expect(ring[0]).toBeCloseTo(Math.PI, 1); // half the wait = half the ring
+  });
+
+  it('the erasers do not wait: the Eraser tool removes a stroke the moment you point at it', () => {
+    const { rig, mode } = drawRig();
+    drawPath(rig, line(20, { x: 0.2, y: 0.3 }, { x: 0.4, y: 0.3 }));
+    rig.mc.handleAction({ type: 'toggleErase' });
+    tipAt(rig, { x: 0.3, y: 0.3 });
+    rig.step();
+    rig.point('right', true);
+    rig.step();
+    expect(mode.strokeList).toHaveLength(0);
+  });
+
+  it('Help opening, a lost hand or undo during the wait starts it over', () => {
+    const { rig, mode } = drawRig();
+    rig.point('right', true);
+    rig.step();
+    rig.step(D.penHoldMs - 500);
+    rig.mc.setUiCaptured(true); // Help opens: the hands don't act meanwhile…
+    rig.step(1000);
+    rig.mc.setUiCaptured(false);
+    rig.step(); // …and when it closes the wait starts again
+    expect(mode.penWait).toBe(0);
+    rig.step(D.penHoldMs - 500);
+    rig.base.capture.release('right', 'lost');
+    rig.step();
+    expect(mode.penWait).toBe(0);
+    rig.step(D.penHoldMs - 500);
+    rig.mc.undo();
+    rig.step();
+    expect(mode.penWait).toBe(0);
+    expect(mode.strokeList).toHaveLength(0);
+  });
+
+  it('a fist with the other hand during the wait erases instead; no line starts', () => {
+    const { rig, mode } = drawRig();
+    drawPath(rig, line(20, { x: 0.2, y: 0.3 }, { x: 0.4, y: 0.3 }));
+    rig.show('left', 0.8, 0.8);
+    tipAt(rig, { x: 0.3, y: 0.6 });
+    rig.point('right', true);
+    rig.step();
+    rig.step(D.penHoldMs - 500);
+    rig.grab('left', true);
+    rig.step();
+    expect(mode.penWait).toBeNull();
+    tipAt(rig, { x: 0.3, y: 0.3 });
+    rig.step(D.penHoldMs);
+    expect(mode.strokeList).toHaveLength(0); // the old line wiped, no new one
   });
 });

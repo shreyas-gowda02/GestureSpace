@@ -1,8 +1,9 @@
-// Experience 3 — Air Draw (§15): point with the dominant hand's index finger (others curled) and
-// the fingertip draws glowing strokes; lower the finger or open the hand to lift the pen (D48 — the
-// user's choice over the spec's pinch). Make a fist with the OTHER hand and the drawing fingertip
-// becomes an eraser, wiping away every stroke it touches until the fist opens (D49); the Eraser tool
-// (X) does the same while pointing. 8 neon colours, 3 widths, glow on / off; every stroke, erase and
+// Experience 3 — Air Draw (§15): point with the dominant hand's index finger (others curled), keep
+// it out for 3 s while a ring fills round the fingertip (D57), and the fingertip draws glowing
+// strokes; lower the finger or open the hand to lift the pen (D48 — the user's choice over the
+// spec's pinch). Make a fist with the OTHER hand and the drawing fingertip becomes an eraser,
+// wiping away every stroke it touches until the fist opens (D49); the Eraser tool (X) does the
+// same while pointing. 8 neon colours, 3 widths, glow on / off; every stroke, erase and
 // Clear is one undo step.
 
 import { TUNING } from '@/config/tuning';
@@ -34,6 +35,8 @@ const D = TUNING.draw;
 const LIMITS = { strokes: 5000, points: 100_000, width: 0.2 };
 const PEN_ID = 'draw-pen';
 const ERASER_ID = 'draw-eraser';
+/** The wait before a line (D57) holds the hand, so a lost hand / Help / mode switch / undo resets it. */
+const WAIT_ID = 'draw-wait';
 
 const other = (s: HandSide): HandSide => (s === 'right' ? 'left' : 'right');
 
@@ -63,6 +66,8 @@ export class DrawMode implements SpatialMode {
      */
     spared: Set<number>;
   } | null = null;
+  /** Pointing, waiting `penHoldMs` before the line starts (D57): the hand and when the wait began. */
+  private wait: { side: HandSide; since: number } | null = null;
   /** A new stroke needs a fresh point: false after a stroke / erase until the finger is lowered. */
   private penArmed = true;
   /** The other hand is a fist this frame (with a short grace for tracking drop-outs). */
@@ -90,6 +95,12 @@ export class DrawMode implements SpatialMode {
   /** The drawing (tests / debug). */
   get strokeList(): readonly Stroke[] {
     return this.strokes;
+  }
+
+  /** How far the wait before a line has come, 0–1, or null when not waiting (tests / the ring). */
+  get penWait(): number | null {
+    if (!this.wait) return null;
+    return D.penHoldMs > 0 ? Math.min(1, (this.now - this.wait.since) / D.penHoldMs) : 1;
   }
 
   /** The strokes: colour, width, glow and points (view units, 5 decimals ≈ 0.01 px). */
@@ -147,7 +158,7 @@ export class DrawMode implements SpatialMode {
     if (frame.gestures[other(frame.dominant)]?.grab.phase === 'active') this.fistSeenAt = this.now;
     this.fist = this.now - this.fistSeenAt <= D.fistGraceMs;
 
-    const side = this.pen?.side ?? this.eraser?.side ?? frame.dominant;
+    const side = this.pen?.side ?? this.eraser?.side ?? this.wait?.side ?? frame.dominant;
     this.readTip(frame, side);
     const g = frame.gestures[side];
     const pointing = g?.point.phase === 'active';
@@ -159,10 +170,12 @@ export class DrawMode implements SpatialMode {
     }
     if (this.eraser) this.continueEraser(pointing);
     if (!pointing) this.penArmed = true;
+    const penReady = pointing && this.penArmed && allowed && this.hasTip && !this.fist;
+    if (this.wait && !(penReady && this.tool === 'pen')) this.endWait();
     if (!this.pen && !this.eraser && allowed && this.hasTip) {
       if (this.fist) this.startEraser(side, true);
       else if (pointing && this.penArmed) {
-        if (this.tool === 'pen') this.startPen(side);
+        if (this.tool === 'pen') this.waitForPen(side);
         else this.startEraser(side, false);
       }
     }
@@ -188,7 +201,12 @@ export class DrawMode implements SpatialMode {
     // The pen tip follows the fingertip every frame, even between tracker readings.
     if (this.hasTip) {
       const erasing = this.eraser || this.fist || this.tool === 'eraser';
-      r.drawCursor(c2d, vp, this.tip, erasing ? null : (this.pen?.look ?? this.look()));
+      const look = this.pen?.look ?? this.look();
+      r.drawCursor(c2d, vp, this.tip, erasing ? null : look);
+      const waited = this.wait ? this.now - this.wait.since : -1;
+      if (waited >= D.penHoldRing.showAfterMs) {
+        r.drawHoldRing(c2d, vp, this.tip, this.penWait ?? 0, look.color);
+      }
     }
   }
 
@@ -220,6 +238,7 @@ export class DrawMode implements SpatialMode {
   }
 
   onSidesSwapped(): void {
+    if (this.wait) this.wait.side = other(this.wait.side);
     if (this.pen) this.pen.side = other(this.pen.side);
     if (this.eraser) this.eraser.side = other(this.eraser.side);
   }
@@ -232,6 +251,7 @@ export class DrawMode implements SpatialMode {
   }
 
   exit(): void {
+    this.endWait();
     this.endPen(true);
     this.endEraser(true);
     this.hover = null;
@@ -256,6 +276,32 @@ export class DrawMode implements SpatialMode {
 
   private look(): StrokeLook {
     return { color: this.color, width: D.widths[this.width]?.size ?? 0.012, glow: this.glow };
+  }
+
+  /**
+   * Pointing with the pen tool: wait `penHoldMs` (the ring fills), then the line starts wherever
+   * the fingertip is (D57). The wait holds the hand like the pen does.
+   */
+  private waitForPen(side: HandSide): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    if (!this.wait) {
+      const reset = (): void => void (this.wait = null); // lost hand, Help, mode switch, undo
+      if (!ctx.capture.capture(side, WAIT_ID, this.now, reset)) return;
+      this.wait = { side, since: this.now };
+    }
+    if (this.now - this.wait.since < D.penHoldMs) return;
+    this.endWait(); // the pen takes the hand over
+    this.startPen(side);
+  }
+
+  private endWait(): void {
+    const wait = this.wait;
+    const ctx = this.ctx;
+    if (!wait || !ctx) return;
+    this.wait = null;
+    if (ctx.capture.get(wait.side)?.targetId === WAIT_ID)
+      ctx.capture.release(wait.side, 'cancelled');
   }
 
   private startPen(side: HandSide): void {
@@ -368,13 +414,18 @@ export class DrawMode implements SpatialMode {
     let text: string;
     const off = other(dominant);
     if (this.pen) text = 'Drawing — lower your finger to lift the pen';
-    else if (this.eraser?.byFist) {
+    else if (this.wait) {
+      const left = Math.max(1, Math.ceil((D.penHoldMs - (this.now - this.wait.since)) / 1000));
+      text = `Keep your finger out — the line starts in ${left} s`;
+    } else if (this.eraser?.byFist) {
       text = `Erasing — your ${dominant} fingertip wipes lines away; open your ${off} hand to stop`;
     } else if (this.eraser) text = 'Erasing — every stroke your fingertip touches goes';
     else if (!allowed) text = 'Both hands pinching — nothing is drawn';
     else if (this.tool === 'eraser') {
       text = 'Eraser — point at strokes to remove them (red = will go) · X for the pen';
-    } else text = `Pen — point your ${dominant} index finger to draw · ${off} fist = eraser`;
+    } else {
+      text = `Pen — point your ${dominant} index finger for ${D.penHoldMs / 1000} s to draw · ${off} fist = eraser`;
+    }
     this.ctx?.emitStatus(text);
   }
 
