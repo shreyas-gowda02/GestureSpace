@@ -8,6 +8,12 @@ export const TUNING = {
     idealWidth: 1280,
     idealHeight: 720,
     facingMode: 'user',
+    /** Settings → Camera resolution (asked for as "ideal": the camera may give something close). */
+    resolutions: {
+      '480p': { width: 640, height: 480 },
+      '720p': { width: 1280, height: 720 },
+      '1080p': { width: 1920, height: 1080 },
+    },
   },
 
   tracker: {
@@ -583,16 +589,46 @@ export const TUNING = {
     toastMs: 1400,
   },
 
+  /** Settings panel ranges (§21.8). */
+  settings: {
+    /**
+     * Pinch sensitivity 0 → 1 scales the pinch thresholds (gestures.pinch) by strict → easy, on a
+     * log scale; 0.5 = × 1 (the tuned values). Easy starts a pinch with the fingers ≈ 30% further
+     * apart.
+     */
+    pinchScale: { strict: 0.75, easy: 1.3 },
+    /** Turn / resize sensitivity slider range (× the natural amount). */
+    sensitivity: { min: 0.5, max: 2 },
+    /** Most device pixels per CSS pixel drawn, by quality (sharper = more GPU work). */
+    pixelRatio: { low: 1, medium: 1.5, high: 2 },
+  },
+
+  /** First-run walkthrough (§21.4). */
+  onboarding: {
+    /** A step's check must hold this long to count (a flicker isn't a success). */
+    holdMs: 400,
+    /** Step 1: only a hand called "left" for this long while asked for the right → swap hint. */
+    wrongHandMs: 1500,
+    /** Step 3: both hands pinching, spread to this × their starting distance. */
+    spread: 1.4,
+    /** After a ✓, the next step comes after this long. */
+    advanceMs: 900,
+  },
+
   persistence: {
     autosaveDebounceMs: 1000,
     settingsVersion: 1,
     sceneVersion: 1,
+    /** localStorage keys; IndexedDB keys are `${scenePrefix}autosave:<mode>` / `saved:<mode>`. */
+    settingsKey: 'gesturespace.settings',
+    onboardingKey: 'gesturespace.onboarded',
+    scenePrefix: 'gesturespace.scene.',
   },
 } as const;
 
 export type Tuning = typeof TUNING;
 
-/** Default user settings (§21.8); persisted/editable from Phase 12. */
+/** Default user settings (§21.8), edited in the Settings panel and kept in localStorage. */
 export const DEFAULT_SETTINGS: Settings = {
   dominant: 'right',
   mirror: TUNING.scene.mirror,
@@ -601,6 +637,13 @@ export const DEFAULT_SETTINGS: Settings = {
   inferenceHz: TUNING.tracker.defaultInferenceHz,
   quality: 'medium',
   depthLockDefault: true,
+  pinchSensitivity: 0.5,
+  turnSensitivity: 1,
+  scaleSensitivity: 1,
+  cameraResolution: '720p',
+  cameraDeviceId: '',
+  swapHands: false,
+  reduceMotion: false,
 };
 
 // ---------- Feature flags (stretch goals + dev-only tools) ----------

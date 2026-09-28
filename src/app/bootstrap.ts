@@ -3,9 +3,18 @@
 // calls. React never touches the camera, tracker, renderer or modes directly.
 
 import type { KeyAction } from '@/config/keybindings';
+import { TUNING } from '@/config/tuning';
 import type { CameraError } from '@/core/camera';
+import type { ModeId } from '@/core/types';
 import type { ModeAction } from '@/modes/types';
 import { useAppStore } from '@/state/appStore';
+import {
+  downloadSceneFile,
+  makeSceneFile,
+  parseSceneFile,
+  readScene,
+  writeScene,
+} from '@/state/persistence';
 import { createLogger } from '@/utils/logger';
 import { Core } from './Core';
 import {
@@ -71,7 +80,7 @@ export const getCore = (): Core | null => coreHolder.peek();
 // ---------------------------------------------------------------------------------------------
 
 export function startCamera(): void {
-  void getCore()?.camera.start();
+  void getCore()?.startCamera();
 }
 
 export function stopCamera(): void {
@@ -106,6 +115,94 @@ export function handleKeyAction(action: KeyAction): boolean {
 /** Tool-panel button of the active experience (tool, colour, depth…). */
 export function modeAction(action: ModeAction): void {
   getCore()?.modeAction(action);
+}
+
+// --- scenes (§22): the active experience's Save / Load / Export / Import ------------------------
+
+/** The active experience's content now (undefined: none). */
+function activeScene(): { core: Core; id: ModeId; data: unknown } | null {
+  const core = getCore();
+  const id = core?.modes.activeId;
+  const data = id ? core?.modes.sceneOf(id) : undefined;
+  return core && id && data !== undefined ? { core, id, data } : null;
+}
+
+/** Save: into the experience's one saved slot. */
+export async function saveScene(): Promise<boolean> {
+  const s = activeScene();
+  return s ? writeScene(s.core.scenes, 'saved', s.id, s.data) : false;
+}
+
+/** Load: the saved slot back, as one undo step. */
+export async function loadSavedScene(): Promise<'loaded' | 'none' | 'invalid'> {
+  const core = getCore();
+  const id = core?.modes.activeId;
+  if (!core || !id) return 'none';
+  const data = await readScene(core.scenes, 'saved', id);
+  if (data === null) return 'none';
+  return core.modes.loadScene(id, data, 'Load saved scene') ? 'loaded' : 'invalid';
+}
+
+/** Export: download the active experience's scene as a JSON file. */
+export function exportScene(): boolean {
+  const s = activeScene();
+  if (!s) return false;
+  downloadSceneFile(makeSceneFile(s.id, s.data));
+  return true;
+}
+
+/**
+ * Import a scene file (its text, untrusted): switches to its experience if needed, then loads it
+ * as one undo step. Returns an error message, or null if it worked.
+ */
+export function importScene(text: string): string | null {
+  const core = getCore();
+  if (!core) return 'The app is not ready yet.';
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return 'This file is not valid JSON.';
+  }
+  const file = parseSceneFile(raw);
+  if ('error' in file) return file.error;
+  if (core.modes.activeId !== file.mode) useAppStore.getState().setActiveMode(file.mode);
+  return core.modes.loadScene(file.mode, file.data, 'Import scene')
+    ? null
+    : 'This scene file is damaged or from a different version of the app.';
+}
+
+// --- the first-run walkthrough's checks (§21.4) --------------------------------------------------
+
+export type OnboardingStep = 'welcome' | 'hand' | 'pinch' | 'spread' | 'done';
+export type OnboardingSnap = ReturnType<Core['onboardingSnapshot']>;
+
+/** What the walkthrough checks (polled a few times a second). */
+export function onboardingSnapshot(): OnboardingSnap | null {
+  return getCore()?.onboardingSnapshot() ?? null;
+}
+
+/** Is this step's hand check met right now? (The walkthrough also wants it held a moment.) */
+export function stepMet(step: OnboardingStep, snap: OnboardingSnap): boolean {
+  switch (step) {
+    case 'hand':
+      return snap.right;
+    case 'pinch':
+      return snap.pinch;
+    case 'spread':
+      return snap.spread >= TUNING.onboarding.spread;
+    default:
+      return false;
+  }
+}
+
+/** Asked for the right hand, only a "left" one is seen: maybe the camera mirrors (swap hint). */
+export const onlyLeftSeen = (snap: OnboardingSnap): boolean => snap.left && !snap.right;
+
+/** Cameras to choose from (names show once camera access was allowed). */
+export async function listCameras(): Promise<{ id: string; label: string }[]> {
+  const devices = (await getCore()?.camera.listDevices()) ?? [];
+  return devices.map((d, i) => ({ id: d.deviceId, label: d.label || `Camera ${i + 1}` }));
 }
 
 export function debugSnapshot(): DebugSnapshot | null {

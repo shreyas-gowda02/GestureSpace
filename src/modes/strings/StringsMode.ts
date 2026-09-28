@@ -12,6 +12,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { TUNING } from '@/config/tuning';
 import type {
+  Command,
   InteractionFrame,
   StringsStyle,
   StringsUiState,
@@ -21,6 +22,10 @@ import type {
 } from '@/core/types';
 import { clamp } from '@/utils/math';
 import { FINGERTIPS, LANDMARK_COUNT } from '@/vision/landmarks';
+import { isRecord } from '../shared/scene';
+
+const STYLES: readonly StringsStyle[] = ['skeleton', 'web', 'mesh'];
+const TRAILS: readonly TrailLength[] = ['off', 'short', 'long'];
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import {
   buildThreads,
@@ -241,6 +246,28 @@ export class StringsMode implements SpatialMode {
     this.upload(ctx);
     this.updateStatus(ctx);
     this.flushUi(false);
+  }
+
+  /** The thread style and trail length. */
+  serialize(): unknown {
+    return { v: 1, style: this.style, trails: this.trails };
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    if (!isRecord(data) || data.v !== 1) return null;
+    const style = STYLES.find((st) => st === data.style);
+    const trails = TRAILS.find((t) => t === data.trails);
+    if (!style || !trails) return null;
+    const before = { style: this.style, trails: this.trails };
+    const apply = (st: { style: StringsStyle; trails: TrailLength }): void => {
+      this.onAction({ type: 'stringsStyle', style: st.style });
+      this.onAction({ type: 'stringsTrails', trails: st.trails });
+    };
+    return {
+      label: 'Load scene',
+      do: () => apply({ style, trails }),
+      undo: () => apply(before),
+    };
   }
 
   onAction(action: ModeAction): boolean {

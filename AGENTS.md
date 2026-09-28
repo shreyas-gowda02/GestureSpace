@@ -98,6 +98,7 @@ src/
     shared/   history.ts (P4: CommandHistory) · TwoHandTransform.ts (P6: two-hand grab + fist
               orbit, undoable)
               TextureSurface.ts (P7: surface + TextureSources) · glsl.ts (P1: coverUv, mirror, hsv)
+              scene.ts (P12: scene-file helpers — pose JSON, checks, the load command)
     voxel/    VoxelMode.ts · VoxelGrid.ts (grid + commands) · VoxelRenderer.ts (instancing, ghost,
               build-plane grid) · voxelMath.ts (DDA line, face extrusion, layer stepping)   (P5)
     panel/    PanelMode.ts (P7)

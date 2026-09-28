@@ -3,7 +3,7 @@
 // the next enter()s; per-mode state (and undo history) is preserved across switches.
 // Also precedence rule 1: while a UI overlay is open, the scene receives no gestures.
 
-import type { InteractionFrame, ModeId } from '@/core/types';
+import type { Command, InteractionFrame, ModeId } from '@/core/types';
 import { CommandHistory } from './shared/history';
 import type { ModeAction, ModeContext, ModeFactory, SpatialMode } from './types';
 
@@ -105,6 +105,36 @@ export class ModeController {
     this.active?.resetView?.();
   }
 
+  /** Nothing has been done in this experience yet (its undo history is empty). */
+  untouched(id: ModeId): boolean {
+    const h = this.histories.get(id);
+    return !h || (!h.canUndo && !h.canRedo);
+  }
+
+  /** Has this experience been opened (created) yet? */
+  has(id: ModeId): boolean {
+    return this.modes.has(id);
+  }
+
+  /** An opened experience's content (undefined: not opened yet, or nothing to keep). */
+  sceneOf(id: ModeId): unknown {
+    return this.modes.get(id)?.serialize?.();
+  }
+
+  /**
+   * Replace an opened experience's content with `data` — as one undo step labelled `label`, or
+   * silently (restoring an autosave, `label` null). False if `data` isn't a scene it accepts.
+   */
+  loadScene(id: ModeId, data: unknown, label: string | null): boolean {
+    const mode = this.modes.get(id);
+    const cmd = mode?.sceneCommand?.(data);
+    if (!cmd) return false;
+    if (this.active?.id === id) this.base.capture.releaseAll('cancelled');
+    if (label === null) cmd.do();
+    else this.historyFor(id).execute(relabel(cmd, label));
+    return true;
+  }
+
   /** Left ↔ right were renamed (D42): let the active experience flip any side it stored. */
   swapSides(): void {
     this.active?.onSidesSwapped?.();
@@ -144,3 +174,9 @@ export class ModeController {
     for (const l of this.historyListeners) l(h);
   }
 }
+
+const relabel = (cmd: Command, label: string): Command => ({
+  label,
+  do: () => cmd.do(),
+  undo: () => cmd.undo(),
+});

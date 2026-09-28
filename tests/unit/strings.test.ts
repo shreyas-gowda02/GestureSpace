@@ -230,9 +230,10 @@ describe('StringsMode', () => {
 
 describe('StringsMode allocates nothing per frame (heap sampling, real hand pipeline)', () => {
   // allocationsPerFrame (modeHarness) counts what Strings code allocates, library calls included.
-  // The engine can still box a few numbers while it re-optimises a function once (seen: 2–9 B /
-  // frame in one window), so the lower of two windows counts: a real per-frame allocation is in
-  // both (one small object per frame ≈ 16–48 B / frame), a one-off blip isn't.
+  // The engine can still box a few numbers while it re-optimises a function (seen: 2–9 B / frame
+  // in one window; 13.4 once with the whole suite competing for the CPU, the spring step still
+  // in V8's middle tier), so after two warm-up windows the lowest of three counts: a real
+  // per-frame allocation is in every window (one small object per frame ≈ 16–48 B / frame).
   const BUDGET_PER_FRAME = 13; // bytes
 
   it('3,000 frames of two waving hands: under 13 bytes per frame from the Strings code', async () => {
@@ -245,7 +246,7 @@ describe('StringsMode allocates nothing per frame (heap sampling, real hand pipe
       for (let i = 0; i < 12; i++) app.play(waveScenario(), () => frames++); // 12 × 4.3 s
       return frames;
     };
-    const best = await allocationsPerFrame(/modes\/strings\//, window, 1);
+    const best = await allocationsPerFrame(/modes\/strings\//, window, 2, 3);
     expect(mode.threadSegments).toBeGreaterThan(0);
     expect(best.perFrame, best.detail).toBeLessThan(BUDGET_PER_FRAME);
   });

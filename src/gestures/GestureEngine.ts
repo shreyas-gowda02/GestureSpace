@@ -91,9 +91,19 @@ class SwipeDetector {
   }
 }
 
+/**
+ * Pinch sensitivity 0..1 (Settings) → factor on the pinch thresholds: 0 strict, 0.5 × 1, 1 easy
+ * (log scale between TUNING.settings.pinchScale's ends). Pure; tested.
+ */
+export function pinchThresholdScale(sensitivity: number): number {
+  const { strict, easy } = TUNING.settings.pinchScale;
+  const t = Math.min(1, Math.max(0, sensitivity));
+  return t < 0.5 ? strict ** (1 - 2 * t) : easy ** (2 * t - 1);
+}
+
 /** All gesture machines for one hand. */
 class HandGestureTracker {
-  readonly pinch = new GestureStateMachine(CONFIGS.pinch);
+  readonly pinch: GestureStateMachine;
   readonly grab = new GestureStateMachine(CONFIGS.grab);
   readonly point = new GestureStateMachine(CONFIGS.point);
   readonly openPalm = new GestureStateMachine(CONFIGS.openPalm);
@@ -101,15 +111,21 @@ class HandGestureTracker {
   private readonly swipe = new SwipeDetector();
   present = false;
 
+  /** `pinchConfig` is shared by both hands and changed in place by the engine. */
+  constructor(pinchConfig: MachineConfig) {
+    this.pinch = new GestureStateMachine(pinchConfig);
+    this.gestures = {
+      pinch: this.pinch.state,
+      grab: this.grab.state,
+      point: this.point.state,
+      openPalm: this.openPalm.state,
+      thumbPinky: this.thumbPinky.state,
+      depthSignal: 0, // set by Core from the DepthEstimator
+    };
+  }
+
   /** Reused output object for this hand. */
-  readonly gestures: HandGestures = {
-    pinch: this.pinch.state,
-    grab: this.grab.state,
-    point: this.point.state,
-    openPalm: this.openPalm.state,
-    thumbPinky: this.thumbPinky.state,
-    depthSignal: 0, // DepthEstimator arrives in Phase 4
-  };
+  readonly gestures: HandGestures;
 
   update(hand: TrackedHand, aspect: number, now: number): HandGestures {
     const lms = hand.triggerLandmarks;
@@ -153,9 +169,11 @@ class HandGestureTracker {
 }
 
 export class GestureEngine {
+  /** This engine's pinch thresholds (Settings → Pinch sensitivity scales them). */
+  private readonly pinchConfig: MachineConfig = { ...CONFIGS.pinch };
   private readonly hands: Record<HandSide, HandGestureTracker> = {
-    left: new HandGestureTracker(),
-    right: new HandGestureTracker(),
+    left: new HandGestureTracker(this.pinchConfig),
+    right: new HandGestureTracker(this.pinchConfig),
   };
   private readonly twoHandTracker = new TwoHandTracker();
   readonly frame: GestureFrame = { twoHand: this.twoHandTracker.state };
@@ -187,6 +205,17 @@ export class GestureEngine {
     f.right = this.updateSide(hands.right, this.hands.right, aspect, now);
     this.twoHandTracker.update(hands.left, f.left?.pinch, hands.right, f.right?.pinch, aspect);
     return f;
+  }
+
+  /** Settings → Pinch sensitivity (0 strict … 0.5 default … 1 easy). */
+  setPinchSensitivity(sensitivity: number): void {
+    const k = pinchThresholdScale(sensitivity);
+    this.pinchConfig.start = CONFIGS.pinch.start * k;
+    this.pinchConfig.end = CONFIGS.pinch.end * k;
+  }
+
+  get pinchThresholds(): { start: number; end: number } {
+    return { start: this.pinchConfig.start, end: this.pinchConfig.end };
   }
 
   /** The hand pipeline renamed left ↔ right (D42): gesture state follows the physical hand. */

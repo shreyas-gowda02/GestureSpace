@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createRefCounted } from '@/app/bootstrap';
+import { createRefCounted, onlyLeftSeen, stepMet, type OnboardingSnap } from '@/app/bootstrap';
+import { TUNING } from '@/config/tuning';
 
 const flush = () => new Promise<void>((r) => queueMicrotask(r));
 
@@ -40,5 +41,31 @@ describe('createRefCounted (core singleton guard)', () => {
     holder.release(); // extra release is a no-op
     await flush();
     expect(stats.disposed).toBe(1);
+  });
+});
+
+describe('first-run walkthrough checks', () => {
+  const snap = (p: Partial<OnboardingSnap>): OnboardingSnap => ({
+    right: false,
+    left: false,
+    pinch: false,
+    spread: 0,
+    ...p,
+  });
+
+  it('each step waits for its own hand check', () => {
+    expect(stepMet('hand', snap({ right: true }))).toBe(true);
+    expect(stepMet('hand', snap({ left: true }))).toBe(false);
+    expect(stepMet('pinch', snap({ pinch: true }))).toBe(true);
+    expect(stepMet('spread', snap({ spread: TUNING.onboarding.spread - 0.01 }))).toBe(false);
+    expect(stepMet('spread', snap({ spread: TUNING.onboarding.spread }))).toBe(true);
+    expect(stepMet('welcome', snap({ right: true, pinch: true, spread: 9 }))).toBe(false);
+    expect(stepMet('done', snap({ right: true }))).toBe(false);
+  });
+
+  it('asked for the right hand but only a "left" one is seen → the swap hint', () => {
+    expect(onlyLeftSeen(snap({ left: true }))).toBe(true);
+    expect(onlyLeftSeen(snap({ left: true, right: true }))).toBe(false);
+    expect(onlyLeftSeen(snap({}))).toBe(false);
   });
 });

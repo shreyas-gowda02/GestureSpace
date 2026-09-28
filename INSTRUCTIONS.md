@@ -3,7 +3,7 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-28, Phase 11 (3D Object Lab)._
+_Last updated: 2026-09-28, Phase 12 (Help, Settings, walkthrough, saving your work)._
 
 | Key | Experience          | Status                                                                  |
 | --- | ------------------- | ----------------------------------------------------------------------- |
@@ -25,15 +25,17 @@ _Last updated: 2026-09-28, Phase 11 (3D Object Lab)._
 3. Sit about **an arm's length** from the camera, in good light, so **both hands fit in the
    picture** with some room around them.
 4. The picture works like a **mirror**: raise your right hand and it shows on the right.
-5. Pick an experience with the dock on the left, or press **1–7**.
+5. The first time, a short **walkthrough** starts: show your right hand, pinch, then pinch with
+   both hands and pull them apart (see section 11). You can skip it.
+6. Pick an experience with the dock on the left, or press **1–7**.
 
 **What's on screen**
 
-- **Top bar:** the experience name, "Camera on", FPS, **Help**, **Debug** and **Settings** (⚙).
-  Help and Settings don't open anything yet (Phase 12).
+- **Top bar:** the experience name, "Camera on", FPS, **Help** (H), **Debug** and **Settings**
+  (⚙) — see section 11.
 - **Dock (left):** the 7 experiences.
-- **Tool panel (right):** the current experience's tools, and a **Gestures** list of its
-  controls. Collapse it with the **›** button.
+- **Tool panel (right):** the current experience's tools, **Your work** (Save / Load / Export /
+  Import, section 12) and a **Gestures** list of its controls. Collapse it with the **›** button.
 - **Status bar (bottom):** what the app sees each hand doing, e.g.
   `Right: pinch · Left: open · Two-hand ✓`, then what the experience is doing, e.g. "Building —
   release to finish". It also holds **Undo**, **Redo**, **Clear**, **Reset** and **Stop cam**.
@@ -41,8 +43,8 @@ _Last updated: 2026-09-28, Phase 11 (3D Object Lab)._
   confidence %. A hand drawn faded means it was just lost; it's kept for 0.15 s in case it comes
   straight back.
 
-**Your "main" hand is the right hand.** It builds and draws; the left hand does the helper
-actions (depth dial, eraser fist). There's no left-handed setting yet (Phase 12).
+**Your "main" hand is the right hand** unless you choose Left in Settings. It builds, draws and
+picks; the other hand does the helper actions (depth dial, eraser fist).
 
 **Only one person is tracked.** If someone walks behind you, the app keeps following your hands
 (the closest, biggest pair).
@@ -88,15 +90,19 @@ Tips:
 | **Q / E**              | Voxel Builder: depth layer − / + · 3D Object Lab: farther / nearer             |
 | **L**                  | Voxel Builder: Depth Lock on / off                                             |
 | **`** (backtick)       | Debug panel (left of the 1 key)                                                |
-| **Esc**                | Close panels and drop whatever a hand is holding (3D Object Lab: deselect)     |
+| **Esc**                | Close windows and drop whatever a hand is holding (3D Object Lab: deselect)    |
+| **H** or **?**         | Help: this experience's gestures and every key                                 |
 | **← / →** or **[ / ]** | Filter Lab: previous / next filter · Portal: previous / next world             |
 | **D**                  | 3D Object Lab: copy the selection                                              |
 | **Delete / Backspace** | 3D Object Lab: delete the selection                                            |
 | **G**                  | 3D Object Lab: group the selection (or ungroup a group)                        |
-| H                      | Reserved for Help (Phase 12)                                                   |
 
 Switching experiences keeps what you made in each one, including its undo history. Anything a
 hand is holding at that moment is let go first.
+
+While a window (Help, Settings, the walkthrough) is open, only **Esc**, **H / ?** and **`** work,
+so a key pressed in a window can't change your work behind it. Your hands don't act on the scene
+then either.
 
 ---
 
@@ -658,7 +664,79 @@ Everything here is **one undo step** (Ctrl+Z / Ctrl+Shift+Z).
 
 ---
 
-## 11. Debug panel and recordings
+## 11. Help, Settings and the walkthrough
+
+### Help (H, ?, or the Help button)
+
+A window with the **gestures of the experience you're in**, the basic hand shapes, and **every
+keyboard shortcut**. **Esc** or ✕ closes it. **Show the walkthrough again** starts the walkthrough.
+
+### Settings (⚙)
+
+Every change applies at once and is **remembered in this browser**.
+
+| Setting                         | What it does                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Main hand** Right / Left      | The hand that builds, draws, picks and opens the Object Lab's shape menu; the other one helps (depth dial, eraser fist) |
+| **Swap left / right**           | For cameras that already mirror their picture: your right hand then shows as "Left". Turn this on to fix it             |
+| **Mirror view**                 | The picture works like a mirror (on) or like someone else looking at you (off)                                          |
+| **Show the hand skeleton**      | The turquoise / magenta hand drawings                                                                                   |
+| **Smoothing** Quick ↔ Steady    | Steadier hands lag a little more behind your real hand                                                                  |
+| **Pinch sensitivity**           | Left: your fingers must really touch; right: a pinch registers earlier (about 30% further apart). Middle = as tuned     |
+| **Turning** ×0.5 – ×2           | How far things turn for a given two-hand tilt or fist move (1 = they turn exactly with your hands)                      |
+| **Resizing** ×0.5 – ×2          | How much things grow or shrink when you spread or close your hands                                                      |
+| **Camera**                      | Which camera to use (names appear once camera access is allowed)                                                        |
+| **Camera resolution**           | 640×480 / 1280×720 / 1920×1080. The camera restarts to switch                                                           |
+| **Hand tracking** 15 / 30 / 60  | How often hands are looked for per second. Lower = lighter on a slow laptop, a little less smooth                       |
+| **Quality** Low / Medium / High | How sharp the 3D is drawn (Low = 1, Medium = 1.5, High = 2 screen pixels per point) and blur / portal detail            |
+| **Reduce motion**               | No pop-in or opening animations (starts on if your computer is set to reduce motion)                                    |
+| **Depth Lock on at start**      | Voxel Builder: Depth Lock is on (or off) when the experience first opens                                                |
+
+**Reset all settings** puts every setting back to how it started.
+
+### The walkthrough
+
+It opens by itself **the first time the camera starts**. **Esc** or **Skip the walkthrough** closes
+it and it won't open by itself again (Help or Settings → **Show the walkthrough again**).
+
+1. **Welcome** — what the camera is for (only when opened by hand).
+2. **Show your right hand** inside the dashed frame. It turns solid green once found. If the app
+   only sees a **left** hand for 1.5 s, it asks whether that's really your right hand: **It's my
+   right hand — swap left / right** turns on the Swap setting for you.
+3. **Pinch** — "✓ Pinch detected".
+4. **Both hands** — pinch with both and pull them apart (to 1.4× as far) — "✓ Two-hand stretch
+   detected".
+5. **You're ready** — **Start the Voxel Builder** or **Explore all experiences**.
+
+Each check must hold for 0.4 s, then the next step comes. **Skip this step** moves on without it.
+
+---
+
+## 12. Your work: saved automatically
+
+Every experience **saves itself in this browser**, 1 second after each change (and when you
+switch experience or leave the page). Close the tab, come back later: your voxels, drawings,
+shapes, the panel's picture and place, the lens and portal, the string style — they're all there.
+
+What is never kept: **camera pictures**. A live camera or camera snapshot on the Panel, a frozen
+frame in the Filter Lab, and pictures you opened yourself are left out (the Panel goes back to its
+sample picture, the lens to the live camera).
+
+**Your work** in the tool panel:
+
+| Button      | Does                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
+| **Save**    | Keeps an extra copy of this experience's work in this browser (one copy per experience; Save again replaces it) |
+| **Load**    | Brings that copy back. **Ctrl+Z** undoes it                                                                     |
+| **Export…** | Downloads this experience's work as a file (`gesturespace-<experience>-<date>.json`)                            |
+| **Import…** | Opens such a file: switches to its experience and loads it. **Ctrl+Z** undoes it                                |
+
+Saved work lives in this browser only: a private window forgets it, and another browser or
+computer won't see it — **Export** it to keep or share a copy.
+
+---
+
+## 13. Debug panel and recordings
 
 Press **`** (backtick) or click **Debug**.
 
@@ -674,22 +752,30 @@ Press **`** (backtick) or click **Debug**.
 
 ---
 
-## 12. Troubleshooting
+## 14. Troubleshooting
 
 | Problem                                       | Try                                                                                                                         |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Nothing reacts                                | Look at the status bar: is the hand shown (`Right: …`)? If it says `—`, the hand isn't seen: more light, move back a little |
 | A gesture isn't recognised                    | The status bar shows what it sees. Make the gesture more clearly (e.g. curl all four fingers for a fist)                    |
-| Left and right are swapped                    | Keep your hands apart for a moment; it corrects itself. Report it with a recording if it persists                           |
+| Left and right are swapped                    | Keep your hands apart for a moment; it corrects itself. Always wrong? Settings → **Swap left / right**                      |
 | Blocks land away from where I aimed           | Watch the ghost block and pinch where it is; the block lands exactly there                                                  |
 | The structure turned or moved by itself       | Ctrl+Z undoes it. Please record it (Debug → Record) so it can be fixed                                                      |
-| Low FPS                                       | Close other heavy tabs; the laptop's graphics chip is shared with hand tracking                                             |
+| Low FPS                                       | Close other heavy tabs; Settings → Quality **Low** or Hand tracking **15 / s**. The graphics chip is shared with tracking   |
+| Pinches don't register (or too easily)        | Settings → **Pinch sensitivity** (right = earlier, left = fingers must touch)                                               |
+| My work is gone                               | It's kept per browser: a private window or another browser starts empty. Use **Export** to keep a copy                      |
 | The camera picture is black / "camera in use" | Close other apps using the camera, then click Start / Enable camera again                                                   |
 
 ---
 
 ## Changelog of controls
 
+- **2026-09-28** — **Help** (H / ?) shows each experience's gestures and every key. **Settings**
+  work and are remembered: main hand Right / Left, swap left / right, mirror, skeleton, smoothing,
+  pinch / turning / resizing sensitivity, camera + resolution, tracking rate, quality, reduce
+  motion, Depth Lock at start, reset. A **first-run walkthrough** (show your right hand, pinch, two
+  hands). **Your work is saved automatically** per experience, plus Save / Load / Export / Import.
+  While a window is open, only Esc, H / ? and ` work.
 - **2026-09-28** — **3D Object Lab built**: make shapes from the tool panel or an open-hand ring
   menu; point + pinch to select and move (push / pull or Q / E for depth); both hands turn /
   resize; fist + drag spins; Add to selection; D copy, Delete / Backspace delete, G group /

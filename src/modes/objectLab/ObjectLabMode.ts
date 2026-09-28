@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
 import type {
+  Command,
   HandGestures,
   HandSide,
   InteractionFrame,
@@ -32,10 +33,15 @@ import {
   samePose,
   TwoHandTransform,
 } from '../shared/TwoHandTransform';
+import { isRecord } from '../shared/scene';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import {
   addCommand,
+  batchCommand,
   groupCommand,
+  itemToNode,
+  nodeToItem,
+  parseLabNodes,
   HOVERED,
   kindName,
   LabScene,
@@ -170,7 +176,8 @@ export class ObjectLabMode implements SpatialMode {
   }
 
   drawOverlay(c2d: CanvasRenderingContext2D): void {
-    if (this.lab?.root.visible) this.menu.draw(c2d, this.now, this.colorHex);
+    if (this.lab?.root.visible)
+      this.menu.draw(c2d, this.now, this.colorHex, this.ctx?.settings.reduceMotion ?? false);
   }
 
   onAction(action: ModeAction): boolean {
@@ -237,6 +244,35 @@ export class ObjectLabMode implements SpatialMode {
     const h = this.hover.left;
     this.hover.left = this.hover.right;
     this.hover.right = h;
+  }
+
+  /** Every shape and group: kind, colour, look, pose (members relative to their group). */
+  serialize(): unknown {
+    const lab = this.lab;
+    if (!lab) return undefined;
+    const items = [];
+    for (let i = 0; i < lab.count; i++) {
+      const item = lab.top(i);
+      if (item) items.push(itemToNode(lab, item));
+    }
+    return { v: 1, items };
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    const lab = this.lab;
+    if (!lab || !isRecord(data) || data.v !== 1) return null;
+    const nodes = parseLabNodes(data.items);
+    if (!nodes) return null;
+    const current: LabItem[] = [];
+    for (let i = 0; i < lab.count; i++) {
+      const item = lab.top(i);
+      if (item) current.push(item);
+    }
+    const loaded = nodes.map((n) => nodeToItem(lab, n));
+    return batchCommand('Load scene', [
+      removeCommand(lab, current, 'Load scene'),
+      addCommand(lab, loaded, 'Load scene'),
+    ]);
   }
 
   /** Clear (C): every shape removed as one undoable step. */
@@ -635,9 +671,11 @@ export class ObjectLabMode implements SpatialMode {
     item.object.position.copy(at);
     lab.root.add(item.object);
     item.object.updateMatrixWorld(true);
-    item.mesh?.scale.setScalar(0.01);
-    this.popping.push(item);
-    this.bornAt.push(this.now);
+    if (!this.ctx?.settings.reduceMotion) {
+      item.mesh?.scale.setScalar(0.01);
+      this.popping.push(item);
+      this.bornAt.push(this.now);
+    }
     this.itemsChanged();
     return item;
   }

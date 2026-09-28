@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
 import type {
+  Command,
   HandGestures,
   HandSide,
   InteractionFrame,
@@ -34,9 +35,18 @@ import {
   transformCommand,
   TwoHandTransform,
 } from '../shared/TwoHandTransform';
+import { isRecord, objectPoseToJson, poseFromJson } from '../shared/scene';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
-import { clearCommand, VoxelEdit, VoxelGrid, type VoxelValue } from './VoxelGrid';
-import { VoxelRenderer } from './VoxelRenderer';
+import {
+  clearCommand,
+  sameVoxel,
+  VoxelEdit,
+  VoxelEditCommand,
+  VoxelGrid,
+  type VoxelChange,
+  type VoxelValue,
+} from './VoxelGrid';
+import { VOXEL_MATERIALS, VoxelRenderer } from './VoxelRenderer';
 import {
   cellOf,
   getAxis,
@@ -243,6 +253,62 @@ export class VoxelMode implements SpatialMode {
     this.orbit?.onSidesSwapped();
     if (this.stroke) this.stroke.side = other(this.stroke.side);
     if (this.dial) this.dial.side = other(this.dial.side);
+  }
+
+  /** Every voxel as x, y, z, colour, material (index), the structure's view and the layer. */
+  serialize(): unknown {
+    const { grid, root } = this;
+    if (!root) return undefined;
+    const cells: number[] = [];
+    grid.forEach((key, v) => {
+      cells.push(grid.keyX(key), grid.keyY(key), grid.keyZ(key), v.color);
+      cells.push(VOXEL_MATERIALS.indexOf(v.material));
+    });
+    return { v: 1, cells, view: objectPoseToJson(root), layer: this.layer };
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    const { grid, root } = this;
+    const view = makePose();
+    if (!root || !isRecord(data) || data.v !== 1 || !poseFromJson(data.view, view)) return null;
+    const { layer, cells } = data;
+    const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
+    if (!isInt(layer) || layer < -grid.half || layer >= grid.half) return null;
+    if (!Array.isArray(cells) || cells.length % 5 || cells.length > grid.size ** 3 * 5) return null;
+    const next = new Map<number, VoxelValue>();
+    for (let i = 0; i < cells.length; i += 5) {
+      const [x, y, z, color, m] = cells.slice(i, i + 5) as unknown[];
+      if (!isInt(x) || !isInt(y) || !isInt(z) || !isInt(color) || !isInt(m)) return null;
+      const material = VOXEL_MATERIALS[m];
+      if (!grid.inBounds(x, y, z) || color < 0 || color > 0xffffff || !material) return null;
+      next.set(grid.key(x, y, z), { color, material });
+    }
+    const changes: VoxelChange[] = [];
+    grid.forEach((key, before) => {
+      const after = next.get(key) ?? null;
+      if (!sameVoxel(before, after)) changes.push({ key, before, after });
+    });
+    next.forEach((after, key) => {
+      if (!grid.getKey(key)) changes.push({ key, before: null, after });
+    });
+    const edit = new VoxelEditCommand('Load scene', grid, changes);
+    const viewBefore = readPose(root, makePose());
+    const layerBefore = this.layer;
+    return {
+      label: 'Load scene',
+      do: () => {
+        edit.do();
+        applyPose(root, view);
+        this.setLayer(layer);
+        this.uiDirty = true;
+      },
+      undo: () => {
+        edit.undo();
+        applyPose(root, viewBefore);
+        this.setLayer(layerBefore);
+        this.uiDirty = true;
+      },
+    };
   }
 
   /** Clear (C): every voxel removed as one undoable step. */

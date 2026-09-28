@@ -144,6 +144,28 @@ function glide(rig: ReturnType<typeof transformRig>, frames: number, f: (k: numb
 }
 
 describe('TwoHandTransform (§12)', () => {
+  it('Settings → Turning / Resizing sensitivity scale how far the object turns and grows', () => {
+    const rig = transformRig();
+    const settings = rig.ctx.settings as { turnSensitivity: number; scaleSensitivity: number };
+    settings.turnSensitivity = 0.5;
+    settings.scaleSensitivity = 2;
+    rig.step();
+    const start = readPose(rig.object, makePose());
+    const a = (-40 * Math.PI) / 180;
+    glide(rig, 60, (k) => {
+      const half = ((0.3 * ASPECT) / 2) * (1 + 0.5 * k); // spread × 1.5
+      const ang = a * k; // the hand line turns 40°
+      rig.l.x = 0.5 - (Math.cos(ang) * half) / ASPECT;
+      rig.l.y = 0.5 - Math.sin(ang) * half;
+      rig.r.x = 0.5 + (Math.cos(ang) * half) / ASPECT;
+      rig.r.y = 0.5 + Math.sin(ang) * half;
+    });
+    rig.step();
+    expect(rig.object.scale.x / start.scale.x).toBeCloseTo(1.5 ** 2, 2); // grows twice as much
+    const turned = rig.object.quaternion.clone().multiply(start.quaternion.clone().invert());
+    expect((2 * Math.acos(Math.min(1, Math.abs(turned.w))) * 180) / Math.PI).toBeCloseTo(20, 0);
+  });
+
   it('no jump when the grab starts, wherever the hands are', () => {
     const rig = transformRig();
     rig.l.x = 0.1;

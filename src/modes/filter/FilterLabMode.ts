@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
 import type {
+  Command,
   FilterPreset,
   FilterSource,
   FilterUiState,
@@ -25,8 +26,10 @@ import {
   TextureSurface,
 } from '../shared/TextureSurface';
 import { applyPose, makePose, TwoHandTransform } from '../shared/TwoHandTransform';
+import { isRecord, objectPoseToJson, poseFromJson, stateCommand } from '../shared/scene';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import {
+  FILTER_PRESETS,
   LENS_SOURCE,
   lensContent,
   lensUniforms,
@@ -160,6 +163,36 @@ export class FilterLabMode implements SpatialMode {
     c2d.fillStyle = '#ffffff';
     c2d.fillText(this.toastText, x, y + 1);
     c2d.restore();
+  }
+
+  /** The lens's place, filter and source (a frozen camera frame or your file: kept as live). */
+  serialize(): unknown {
+    const o = this.surface?.object;
+    if (!o) return undefined;
+    const source = this.source === 'picture' ? 'picture' : 'lens';
+    return { v: 1, preset: this.preset, source, pose: objectPoseToJson(o) };
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    const o = this.surface?.object;
+    const pose = makePose();
+    if (!o || !isRecord(data) || data.v !== 1 || !poseFromJson(data.pose, pose)) return null;
+    const preset = FILTER_PRESETS.find((p) => p.id === data.preset)?.id;
+    const source = data.source === 'picture' || data.source === 'lens' ? data.source : null;
+    if (!preset || !source) return null;
+    type State = { preset: FilterPreset; source: 'lens' | 'picture' | null };
+    const apply = (st: State): void => {
+      this.preset = st.preset;
+      if (this.uniforms) this.uniforms.uPreset.value = presetIndex(st.preset);
+      if (st.source && st.source !== this.source) this.setSource(st.source);
+      this.uiDirty = true;
+      this.flushUi(true);
+    };
+    const now: State = {
+      preset: this.preset,
+      source: this.source === 'lens' || this.source === 'picture' ? this.source : null,
+    };
+    return stateCommand(o, apply, now, { preset, source }, pose);
   }
 
   /** Clear (C): nothing to clear on a lens. */

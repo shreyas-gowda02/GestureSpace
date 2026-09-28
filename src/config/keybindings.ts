@@ -34,18 +34,18 @@ export const KEYBINDING_HELP: readonly { keys: string; action: string }[] = [
   { keys: '1–7', action: 'Switch experience' },
   { keys: 'Ctrl/Cmd+Z', action: 'Undo' },
   { keys: 'Ctrl/Cmd+Shift+Z', action: 'Redo' },
-  { keys: 'C', action: 'Clear mode' },
-  { keys: 'R', action: 'Reset transform / view' },
-  { keys: 'H', action: 'Help' },
+  { keys: 'C', action: 'Clear the current experience' },
+  { keys: 'R', action: 'Reset (view, position, or turn & size)' },
+  { keys: 'H or ?', action: 'Help (this window)' },
   { keys: '`', action: 'Debug panel' },
-  { keys: 'Q / E', action: 'Depth − / +' },
-  { keys: 'L', action: 'Depth lock' },
+  { keys: 'Q / E', action: 'Depth − / + (Voxel layer · Object Lab farther / nearer)' },
+  { keys: 'L', action: 'Depth Lock (Voxel)' },
   { keys: 'X', action: 'Build / erase (Voxel) · pen / eraser (Draw)' },
-  { keys: '← / →  or  [ / ]', action: 'Filter prev / next' },
-  { keys: 'Delete / Backspace', action: 'Delete selection' },
-  { keys: 'D', action: 'Duplicate' },
-  { keys: 'G', action: 'Group / ungroup selection' },
-  { keys: 'Esc', action: 'Close overlays / release' },
+  { keys: '← / →  or  [ / ]', action: 'Previous / next filter or portal world' },
+  { keys: 'Delete / Backspace', action: 'Delete the selection (Object Lab)' },
+  { keys: 'D', action: 'Copy the selection (Object Lab)' },
+  { keys: 'G', action: 'Group / ungroup the selection (Object Lab)' },
+  { keys: 'Esc', action: 'Close windows · let go · deselect' },
 ];
 
 /** Pure mapping from a key event to an app action (unit-tested). */
@@ -67,6 +67,7 @@ export function resolveKeyAction(e: KeyInput): KeyAction | null {
     case 'r':
       return { type: 'reset' };
     case 'h':
+    case '?':
       return { type: 'help' };
     case '`':
       return { type: 'debug' };

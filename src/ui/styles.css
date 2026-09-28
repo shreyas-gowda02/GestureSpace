@@ -302,7 +302,7 @@ kbd {
   gap: 12px;
   background: var(--gs-glass-strong);
   pointer-events: auto;
-  animation: gs-rise var(--gs-dur) var(--gs-ease);
+  animation: gs-fade var(--gs-dur) var(--gs-ease); /* gs-rise would drop the centring transform */
 }
 
 .gs-perm__icon {
@@ -796,7 +796,8 @@ kbd {
   font-size: 13px;
 }
 
-.gs-toolpanel__count {
+.gs-toolpanel__count,
+.gs-toolpanel__note {
   margin: 14px 0 0;
   font-size: 12px;
 }
@@ -828,4 +829,284 @@ kbd {
 .gs-statusbar__actions {
   display: flex;
   gap: 6px;
+}
+
+/* ---------- Reduce motion (Settings; the system setting is handled at the top) ---------- */
+.gs-app.is-reduced-motion,
+.gs-app.is-reduced-motion *,
+.gs-app.is-reduced-motion *::before,
+.gs-app.is-reduced-motion *::after {
+  --gs-dur: 0ms;
+  animation-duration: 0ms !important;
+  transition-duration: 0ms !important;
+}
+
+/* ---------- Windows (Help, Settings) ---------- */
+.gs-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--gs-topbar-h) + var(--gs-gap) * 2) 16px
+    calc(var(--gs-statusbar-h) + var(--gs-gap) * 2);
+  background: rgba(3, 5, 9, 0.45);
+  animation: gs-fade var(--gs-dur) var(--gs-ease);
+}
+
+.gs-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 100%);
+  max-height: 100%;
+  background: var(--gs-glass-strong);
+  animation: gs-rise var(--gs-dur) var(--gs-ease);
+}
+
+.gs-dialog--wide {
+  width: min(820px, 100%);
+}
+
+.gs-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 8px 18px;
+  border-bottom: 1px solid var(--gs-glass-border);
+}
+
+.gs-dialog__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.gs-dialog__body {
+  overflow-y: auto;
+  padding: 6px 18px 16px;
+}
+
+.gs-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+@keyframes gs-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.gs-help,
+.gs-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 28px;
+}
+
+@media (max-width: 720px) {
+  .gs-help,
+  .gs-settings {
+    grid-template-columns: 1fr;
+  }
+}
+
+.gs-keys {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.gs-keys th,
+.gs-keys td {
+  padding: 5px 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--gs-glass-border);
+}
+
+.gs-keys th {
+  width: 42%;
+  padding-right: 10px;
+  font-weight: 400;
+}
+
+.gs-keys td {
+  color: var(--gs-text-muted);
+}
+
+/* ---------- Settings controls ---------- */
+.gs-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.gs-setting .gs-segmented {
+  flex: 0 0 auto;
+  min-width: 190px;
+}
+
+.gs-setting--slider {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.gs-setting__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.gs-setting__hint {
+  font-size: 11.5px;
+  color: var(--gs-text-muted);
+}
+
+.gs-slider {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+}
+
+.gs-slider input {
+  width: 100%;
+  accent-color: var(--gs-accent);
+}
+
+.gs-select {
+  max-width: 220px;
+  padding: 6px 8px;
+  color: var(--gs-text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--gs-glass-border);
+  border-radius: var(--gs-radius-sm);
+  font: inherit;
+  font-size: 13px;
+}
+
+.gs-select option {
+  color: #111;
+}
+
+.gs-switch {
+  flex: 0 0 auto;
+  position: relative;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--gs-glass-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  transition: background var(--gs-dur) var(--gs-ease);
+}
+
+.gs-switch.is-on {
+  background: var(--gs-accent);
+}
+
+.gs-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--gs-dur) var(--gs-ease);
+}
+
+.gs-switch.is-on .gs-switch__knob {
+  transform: translateX(18px);
+}
+
+/* ---------- First-run walkthrough ---------- */
+.gs-onboard {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.gs-onboard__frame {
+  position: absolute;
+  left: 50%;
+  top: 40%; /* above the walkthrough card */
+  width: min(38vw, 420px);
+  height: min(46vh, 380px);
+  transform: translate(-50%, -50%);
+  border: 3px dashed rgba(255, 255, 255, 0.55);
+  border-radius: 28px;
+  transition: border-color var(--gs-dur) var(--gs-ease);
+}
+
+.gs-onboard__frame.is-met {
+  border-style: solid;
+  border-color: var(--gs-lime);
+}
+
+.gs-onboard__card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--gs-statusbar-h) + var(--gs-gap) * 2);
+  width: min(480px, calc(100% - 32px));
+  transform: translateX(-50%);
+  padding: 16px 18px;
+  background: var(--gs-glass-strong);
+  pointer-events: auto;
+  animation: gs-rise var(--gs-dur) var(--gs-ease);
+}
+
+.gs-onboard__step {
+  margin: 0;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gs-accent);
+}
+
+.gs-onboard__title {
+  margin: 4px 0 6px;
+  font-size: 18px;
+}
+
+.gs-onboard__text {
+  margin: 0;
+  color: var(--gs-text-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.gs-onboard__check {
+  margin: 12px 0 0;
+  font-weight: 600;
+  color: var(--gs-text-muted);
+}
+
+.gs-onboard__check.is-met {
+  color: var(--gs-lime);
+}
+
+.gs-onboard__hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 182, 46, 0.5);
+  border-radius: var(--gs-radius-sm);
+  font-size: 13px;
+}
+
+.gs-onboard__hint p {
+  margin: 0;
 }

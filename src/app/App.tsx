@@ -25,6 +25,9 @@ function useKeyboardShortcuts(): void {
       const action = resolveKeyAction(e);
       if (!action) return;
       const store = useAppStore.getState();
+      // A window is open: only Esc, Help and Debug work; everything else is for the window.
+      const windowOpen = store.helpOpen || store.settingsOpen || store.onboardingOpen;
+      if (windowOpen && !['escape', 'help', 'debug'].includes(action.type)) return;
       switch (action.type) {
         case 'mode':
           store.setActiveMode(action.mode);
@@ -36,6 +39,7 @@ function useKeyboardShortcuts(): void {
           store.toggleDebug();
           break;
         case 'escape':
+          if (store.onboardingOpen) store.closeOnboarding();
           store.closeOverlays();
           handleKeyAction(action); // also drops anything held
           break;

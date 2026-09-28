@@ -36,6 +36,7 @@ import { CoordinateMapper, RaycastCursor } from '@/spatial/CoordinateMapper';
 import { DepthEstimator } from '@/spatial/DepthEstimator';
 import { ViewportMapper } from '@/spatial/ViewportMapper';
 import { useAppStore, type AppState } from '@/state/appStore';
+import { Autosaver, browserSceneStore, type SceneStore } from '@/state/persistence';
 import { createLogger } from '@/utils/logger';
 import { HandNormalizer } from '@/vision/handPipeline';
 import { HandTracker, type TrackerBackend } from '@/vision/HandTracker';
@@ -88,6 +89,9 @@ export class Core {
   readonly loop: RenderLoop;
   /** Live settings object handed to modes (updated in place). */
   readonly settings: Settings;
+  /** Scenes: each experience's autosave + its "Save" slot (IndexedDB; null = unavailable). */
+  readonly scenes: SceneStore | null = browserSceneStore();
+  private readonly autosaver: Autosaver;
 
   private readonly markers: Record<HandSide, CursorMarker> = {
     left: new CursorMarker('left'),
@@ -156,18 +160,33 @@ export class Core {
         capture: this.capture,
         settings: this.settings,
         emitStatus: this.emitStatus,
-        publishUi: <K extends keyof ModeUiStates>(id: K, state: ModeUiStates[K]) =>
-          useAppStore.getState().setModeUi(id, state),
+        publishUi: <K extends keyof ModeUiStates>(id: K, state: ModeUiStates[K]) => {
+          useAppStore.getState().setModeUi(id, state);
+          this.autosaver.touch(id); // a tool / content change is worth keeping too
+        },
       },
       MODE_FACTORIES,
     );
 
+    this.autosaver = new Autosaver(this.scenes, (id) => this.modes.sceneOf(id));
     this.loop = new RenderLoop(this.frame);
     this.unsubscribers.push(
       this.camera.onChange(this.onCameraChange),
-      this.modes.onHistoryChange((h) => useAppStore.getState().setHistory(h.canUndo, h.canRedo)),
+      this.modes.onHistoryChange((h) => {
+        useAppStore.getState().setHistory(h.canUndo, h.canRedo);
+        const id = this.modes.activeId;
+        if (id) this.autosaver.touch(id);
+      }),
       useAppStore.subscribe(this.onStoreChange),
     );
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', this.flushScenes);
+      document.addEventListener('visibilitychange', this.onVisibility);
+      this.unsubscribers.push(() => {
+        window.removeEventListener('pagehide', this.flushScenes);
+        document.removeEventListener('visibilitychange', this.onVisibility);
+      });
+    }
     this.unsubscribeTracker = this.trackerBackend.onChange(this.onTrackerChange);
     this.switchMode(store.activeMode);
     counters.coreCreated++;
@@ -221,6 +240,8 @@ export class Core {
   }
 
   dispose(): void {
+    void this.autosaver.flush();
+    this.autosaver.dispose();
     this.unmount();
     this.stopLoop();
     for (const off of this.unsubscribers) off();
@@ -239,6 +260,37 @@ export class Core {
     counters.coreDisposed++;
     log.debug('core disposed');
   }
+
+  /** Start the camera with the chosen device and resolution (Settings). */
+  startCamera(): Promise<void> {
+    const s = this.settings;
+    const res = TUNING.camera.resolutions[s.cameraResolution];
+    return this.camera.start({
+      width: res.width,
+      height: res.height,
+      deviceId: s.cameraDeviceId || undefined,
+    });
+  }
+
+  /** What the first-run walkthrough checks (polled a few times a second). */
+  onboardingSnapshot(): { right: boolean; left: boolean; pinch: boolean; spread: number } {
+    const { left, right } = this.hands;
+    const g = this.gestures;
+    const pinch = g.left?.pinch.phase === 'active' || g.right?.pinch.phase === 'active';
+    return {
+      right: !!right && right.lostForMs === 0,
+      left: !!left && left.lostForMs === 0,
+      pinch,
+      spread: g.twoHand.active ? g.twoHand.scale : 0,
+    };
+  }
+
+  /** Save every waiting autosave now (leaving the page, hiding the tab). */
+  private readonly flushScenes = (): void => void this.autosaver.flush();
+
+  private readonly onVisibility = (): void => {
+    if (document.visibilityState === 'hidden') this.flushScenes();
+  };
 
   retryTracker(): void {
     void this.trackerBackend.load();
@@ -346,25 +398,49 @@ export class Core {
   }
 
   private switchMode(id: ModeId): void {
+    const previous = this.modes.activeId;
+    const fresh = !this.modes.has(id);
     this.modes.switchTo(id);
     this.interaction.activeMode = id;
     counters.modeSwitches++;
+    if (previous) void this.autosaver.flush(previous);
+    if (fresh) void this.restoreScene(id);
   }
 
-  private applySettings(s: Settings): void {
+  /** An experience opened for the first time gets its autosave back (unless already used). */
+  private async restoreScene(id: ModeId): Promise<void> {
+    const data = await this.autosaver.restore(id);
+    if (data === null || !this.modes.untouched(id)) return;
+    if (!this.modes.loadScene(id, data, null)) log.warn(`autosave for ${id} not usable`);
+  }
+
+  private applySettings(s: Settings, prev?: Settings): void {
     Object.assign(this.settings, s);
     this.viewport.setMirror(s.mirror);
     this.normalizer.setSmoothing(s.smoothing);
     this.live.setRate(s.inferenceHz);
+    this.gestureEngine.setPinchSensitivity(s.pinchSensitivity);
     if (this.interaction) this.interaction.dominant = s.dominant;
+    const ratio = TUNING.settings.pixelRatio[s.quality];
+    if (ratio !== this.sceneManager.maxPixelRatio) {
+      this.sceneManager.maxPixelRatio = ratio;
+      this.syncSize();
+    }
+    if (!prev || s.swapHands !== prev.swapHands) {
+      this.normalizer.setLabelSwap(s.swapHands);
+      if (prev) this.resetPerception(); // forget hands named the old way
+    }
+    const cameraChanged =
+      !!prev &&
+      (s.cameraResolution !== prev.cameraResolution || s.cameraDeviceId !== prev.cameraDeviceId);
+    if (cameraChanged && this.camera.running) void this.startCamera();
   }
 
   private readonly onStoreChange = (state: AppState, prev: AppState): void => {
     if (state.activeMode !== prev.activeMode) this.switchMode(state.activeMode);
-    if (state.settings !== prev.settings) this.applySettings(state.settings);
-    if (state.helpOpen !== prev.helpOpen || state.settingsOpen !== prev.settingsOpen) {
-      this.modes.setUiCaptured(state.helpOpen || state.settingsOpen);
-    }
+    if (state.settings !== prev.settings) this.applySettings(state.settings, prev.settings);
+    const ui = (a: AppState): boolean => a.helpOpen || a.settingsOpen || a.onboardingOpen;
+    if (ui(state) !== ui(prev)) this.modes.setUiCaptured(ui(state));
   };
 
   private readonly emitStatus = (text: string): void => {
@@ -560,6 +636,7 @@ export class Core {
     } else if (!streaming && this.wasStreaming) {
       counters.cameraStreamsActive--;
     }
+    const firstFrames = streaming && !this.wasStreaming;
     this.wasStreaming = streaming;
 
     // "Camera stopped: everything paused" (§21.3) — unless a fixture is playing.
@@ -568,6 +645,8 @@ export class Core {
     if (streaming && this.trackerBackend.status === 'idle') void this.trackerBackend.load();
 
     useAppStore.getState().setCamera(cam.state, cam.error);
+    // The first-run walkthrough starts once the camera shows the hands.
+    if (firstFrames) useAppStore.getState().maybeStartOnboarding();
   };
 
   private readonly onTrackerChange = (t: TrackerBackend): void => {

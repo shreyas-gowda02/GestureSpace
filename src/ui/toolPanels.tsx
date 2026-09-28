@@ -2,8 +2,15 @@
 // panel shows through the store (≤ 10 Hz); buttons send ModeActions back to it via bootstrap.
 // Every gesture action here also has a key (§21.10), shown next to it.
 
-import { useRef } from 'react';
-import { modeAction, resetView } from '@/app/bootstrap';
+import { useRef, useState } from 'react';
+import {
+  exportScene,
+  importScene,
+  loadSavedScene,
+  modeAction,
+  resetView,
+  saveScene,
+} from '@/app/bootstrap';
 import { TUNING } from '@/config/tuning';
 import { FILTER_PRESETS } from '@/modes/filter/filters';
 import { OBJECT_KINDS } from '@/modes/objectLab/objects';
@@ -597,6 +604,90 @@ function ObjectLabTools() {
       </button>
       <p className="gs-muted gs-toolpanel__count">
         {ui.count} {ui.count === 1 ? 'object' : 'objects'} · {ui.selected} selected
+      </p>
+    </>
+  );
+}
+
+/** Biggest scene file Import reads (a 5,000-voxel structure is ≈ 0.2 MB). */
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
+
+/**
+ * "Your work" (§22): every experience autosaves in this browser; Save / Load keep one extra copy,
+ * Export / Import move a scene as a JSON file. Load and Import are undoable.
+ */
+export function SceneTools() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [note, setNote] = useState('Saved automatically in this browser.');
+
+  const onFile = async (file: File | undefined): Promise<void> => {
+    if (!file) return;
+    if (file.size > MAX_IMPORT_BYTES) {
+      setNote('That file is too big to be a GestureSpace scene.');
+      return;
+    }
+    const error = importScene(await file.text());
+    setNote(error ?? `Imported ${file.name} — Ctrl+Z undoes it.`);
+  };
+
+  return (
+    <>
+      <h3 className="gs-toolpanel__sub">Your work</h3>
+      <div className="gs-segmented" role="group" aria-label="Save or load">
+        <button
+          type="button"
+          className="gs-btn"
+          onClick={() =>
+            void saveScene().then((ok) =>
+              setNote(ok ? 'Saved. Load brings this back.' : 'Could not save in this browser.'),
+            )
+          }
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          className="gs-btn"
+          onClick={() =>
+            void loadSavedScene().then((r) =>
+              setNote(
+                r === 'loaded'
+                  ? 'Loaded your saved copy — Ctrl+Z undoes it.'
+                  : r === 'none'
+                    ? 'Nothing saved here yet: press Save first.'
+                    : 'The saved copy could not be read.',
+              ),
+            )
+          }
+        >
+          Load
+        </button>
+      </div>
+      <div className="gs-segmented" role="group" aria-label="Export or import a file">
+        <button
+          type="button"
+          className="gs-btn"
+          onClick={() => setNote(exportScene() ? 'Downloaded a scene file.' : 'Nothing to export.')}
+        >
+          Export…
+        </button>
+        <button type="button" className="gs-btn" onClick={() => fileRef.current?.click()}>
+          Import…
+        </button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json,.json"
+        hidden
+        aria-label="Import a scene file"
+        onChange={(e) => {
+          void onFile(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      <p className="gs-muted gs-toolpanel__note" role="status" aria-live="polite">
+        {note}
       </p>
     </>
   );

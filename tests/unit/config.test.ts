@@ -53,6 +53,11 @@ describe('keybindings', () => {
     expect(resolveKeyAction(key('c', { ctrlKey: true }))).toBeNull();
   });
 
+  it('H or ? opens Help', () => {
+    expect(resolveKeyAction(key('h'))).toEqual({ type: 'help' });
+    expect(resolveKeyAction(key('?', { shiftKey: true }))).toEqual({ type: 'help' });
+  });
+
   it('maps the 3D Object Lab keys: copy, delete (Delete or Backspace), group', () => {
     expect(resolveKeyAction(key('d'))).toEqual({ type: 'duplicate' });
     expect(resolveKeyAction(key('Delete'))).toEqual({ type: 'delete' });

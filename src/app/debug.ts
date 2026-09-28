@@ -112,6 +112,8 @@ export interface DebugSnapshot {
     canRedo: boolean;
   };
   renderer: { calls: number; triangles: number; geometries: number; textures: number };
+  /** JS heap in use (MB) where the browser reports it (Chrome), else null. */
+  heapMb: number | null;
 }
 
 const GESTURE_NAMES = ['pinch', 'grab', 'point', 'openPalm', 'thumbPinky'] as const;
@@ -210,7 +212,13 @@ export function buildDebugSnapshot(core: Core): DebugSnapshot {
       geometries: info.memory.geometries,
       textures: info.memory.textures,
     },
+    heapMb: heapMb(),
   };
+}
+
+function heapMb(): number | null {
+  const mem = (performance as Performance & { memory?: { usedJSHeapSize: number } }).memory;
+  return mem ? mem.usedJSHeapSize / (1024 * 1024) : null;
 }
 
 export interface LeakCheckResult {

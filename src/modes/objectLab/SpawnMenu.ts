@@ -148,9 +148,10 @@ export class SpawnMenu {
 
   // --- drawing (2D overlay, CSS px) ------------------------------------------------------------
 
-  draw(c2d: CanvasRenderingContext2D, now: number, color: string): void {
+  /** `still` = reduce motion: the menu appears at once instead of popping open. */
+  draw(c2d: CanvasRenderingContext2D, now: number, color: string, still = false): void {
     if (this.state === 'charging') this.drawCharge(c2d, now);
-    else if (this.state === 'open') this.drawMenu(c2d, now, color);
+    else if (this.state === 'open') this.drawMenu(c2d, still ? Infinity : now, color);
   }
 
   /** A ring filling round the fingertip while the open hand is held still. */

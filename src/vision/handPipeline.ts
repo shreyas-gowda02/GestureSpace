@@ -225,7 +225,7 @@ export class HandNormalizer {
   /** Visual landmark mode: raw ('off'), filtered ('smooth') or filtered + predicted ('predict'). */
   smoothingMode: SmoothingMode = 'predict';
 
-  private readonly swap: boolean;
+  private swap: boolean;
   private readonly cands: Candidate[] = Array.from({ length: MAX_CANDIDATES }, () => ({
     raw: null,
     score: 0,
@@ -258,6 +258,14 @@ export class HandNormalizer {
 
   constructor(opts: NormalizerOptions = {}) {
     this.swap = opts.swapLabels ?? TUNING.tracker.HANDEDNESS_LABEL_SWAP;
+  }
+
+  /**
+   * Settings → "Swap left / right hands" (for cameras that already mirror their picture): flips the
+   * meaning of both votes. Clear the tracked hands afterwards so no old evidence is kept.
+   */
+  setLabelSwap(swap: boolean): void {
+    this.swap = swap !== TUNING.tracker.HANDEDNESS_LABEL_SWAP;
   }
 
   setIdentityLock(locked: boolean): void {

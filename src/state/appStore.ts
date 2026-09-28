@@ -4,6 +4,14 @@ import { create } from 'zustand';
 import type { CameraError, CameraState } from '@/core/camera';
 import { DEFAULT_SETTINGS } from '@/config/tuning';
 import type { ModeId, ModeUiStates, Settings } from '@/core/types';
+import {
+  clearSettings,
+  loadSettings,
+  onboardingDone,
+  prefersReducedMotion,
+  saveSettings,
+  setOnboardingDone,
+} from './persistence';
 import type { TrackerDelegate, TrackerStatus } from '@/vision/HandTracker';
 
 export type CameraStatus = CameraState;
@@ -29,6 +37,8 @@ export interface AppState {
   helpOpen: boolean;
   debugOpen: boolean;
   settingsOpen: boolean;
+  /** The first-run walkthrough (§21.4) is showing. */
+  onboardingOpen: boolean;
   canUndo: boolean;
   canRedo: boolean;
 
@@ -39,13 +49,22 @@ export interface AppState {
   setStatusText(text: string): void;
   setModeStatus(text: string): void;
   setModeUi<K extends keyof ModeUiStates>(id: K, state: ModeUiStates[K]): void;
+  /** Change settings (saved at once). */
   updateSettings(patch: Partial<Settings>): void;
+  /** Every setting back to its default (and forget the saved ones). */
+  resetSettings(): void;
   setHistory(canUndo: boolean, canRedo: boolean): void;
   setFps(fps: number): void;
   toggleToolPanel(): void;
   toggleHelp(): void;
   toggleDebug(): void;
   toggleSettings(): void;
+  /** Show the walkthrough (from Help / Settings, or the first time the camera starts). */
+  openOnboarding(): void;
+  /** Finish or skip it: it won't open by itself again. */
+  closeOnboarding(): void;
+  /** The walkthrough opens by itself the first time the camera runs, if never finished. */
+  maybeStartOnboarding(): void;
   closeOverlays(): void;
 }
 
@@ -60,12 +79,13 @@ export const useAppStore = create<AppState>()((set) => ({
   statusText: 'Right: — · Left: —',
   modeStatus: '',
   modeUi: {},
-  settings: DEFAULT_SETTINGS,
+  settings: loadSettings(),
   fps: 0,
   toolPanelOpen: true,
   helpOpen: false,
   debugOpen: false,
   settingsOpen: false,
+  onboardingOpen: false,
   canUndo: false,
   canRedo: false,
 
@@ -77,12 +97,29 @@ export const useAppStore = create<AppState>()((set) => ({
   setStatusText: (statusText) => set({ statusText }),
   setModeStatus: (modeStatus) => set({ modeStatus }),
   setModeUi: (id, state) => set((s) => ({ modeUi: { ...s.modeUi, [id]: state } })),
-  updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+  updateSettings: (patch) =>
+    set((s) => {
+      const settings = { ...s.settings, ...patch };
+      saveSettings(settings);
+      return { settings };
+    }),
+  resetSettings: () => {
+    clearSettings();
+    set({ settings: { ...DEFAULT_SETTINGS, reduceMotion: prefersReducedMotion() } });
+  },
   setHistory: (canUndo, canRedo) => set({ canUndo, canRedo }),
   setFps: (fps) => set({ fps }),
   toggleToolPanel: () => set((s) => ({ toolPanelOpen: !s.toolPanelOpen })),
-  toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen })),
+  toggleHelp: () => set((s) => ({ helpOpen: !s.helpOpen, settingsOpen: false })),
   toggleDebug: () => set((s) => ({ debugOpen: !s.debugOpen })),
-  toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen })),
+  toggleSettings: () => set((s) => ({ settingsOpen: !s.settingsOpen, helpOpen: false })),
+  openOnboarding: () => set({ onboardingOpen: true, helpOpen: false, settingsOpen: false }),
+  closeOnboarding: () => {
+    setOnboardingDone(true);
+    set({ onboardingOpen: false });
+  },
+  maybeStartOnboarding: () => {
+    if (!onboardingDone()) set({ onboardingOpen: true });
+  },
   closeOverlays: () => set({ helpOpen: false, settingsOpen: false }),
 }));

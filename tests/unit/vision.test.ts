@@ -89,6 +89,21 @@ describe('HandNormalizer', () => {
     expect(g.right?.landmarks[WRIST]?.x).toBeCloseTo(0.3);
   });
 
+  it('Settings → Swap left / right flips how hands are named (once old hands are forgotten)', () => {
+    const n = new HandNormalizer({ swapLabels: false });
+    expect(n.process(det([rawHand('Right', 0.6)]), true, 0).right).toBeDefined();
+    n.setLabelSwap(true);
+    n.clear(10);
+    const swapped = n.process({ ...det([rawHand('Right', 0.6)]), timestamp: 1100 }, true, 20);
+    expect(swapped.left).toBeDefined();
+    expect(swapped.right).toBeUndefined();
+    n.setLabelSwap(false);
+    n.clear(30);
+    expect(
+      n.process({ ...det([rawHand('Right', 0.6)]), timestamp: 1200 }, true, 40).right,
+    ).toBeDefined();
+  });
+
   it('computes palm scale and bounds in view space', () => {
     const n = new HandNormalizer({ swapLabels: true });
     const h = n.process(det([rawHand('Right', 0.6)]), true, 0).left;

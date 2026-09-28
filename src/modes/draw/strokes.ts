@@ -27,6 +27,34 @@ export interface Stroke {
   readonly maxY: number;
 }
 
+/** A finished stroke from its points (x0, y0, x1, y1 …, view units): works out the bounds. */
+export function makeStroke(id: number, look: StrokeLook, points: Float32Array): Stroke {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (let k = 0; k < points.length; k += 2) {
+    const x = points[k] ?? 0;
+    const y = points[k + 1] ?? 0;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  return {
+    id,
+    color: look.color,
+    width: look.width,
+    glow: look.glow,
+    points,
+    count: points.length / 2,
+    minX,
+    minY,
+    maxX,
+    maxY,
+  };
+}
+
 /** What the renderer needs to draw a stroke (finished, or live from the builder). */
 export interface StrokeLook {
   readonly color: string;
@@ -93,20 +121,7 @@ export class StrokeBuilder {
       const dy = this.tail.y - (this.buf[i + 1] ?? 0);
       if (dx * dx + dy * dy > 1e-10) this.push(this.tail.x, this.tail.y);
     }
-    const points = this.buf.slice(0, this.count * 2);
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (let k = 0; k < points.length; k += 2) {
-      const x = points[k] ?? 0;
-      const y = points[k + 1] ?? 0;
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    }
-    return { id, ...look, points, count: this.count, minX, minY, maxX, maxY };
+    return makeStroke(id, look, this.buf.slice(0, this.count * 2));
   }
 
   private ensure(points: number): void {

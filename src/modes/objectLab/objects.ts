@@ -19,6 +19,7 @@ import {
   samePose,
   type Pose,
 } from '../shared/TwoHandTransform';
+import { isHexColor, isRecord, objectPoseToJson, poseFromJson } from '../shared/scene';
 
 const L = TUNING.objectLab;
 
@@ -437,6 +438,83 @@ export function batchCommand(label: string, cmds: readonly Command[]): Command {
       for (let i = list.length - 1; i >= 0; i--) list[i]?.undo();
     },
   };
+}
+
+// --- scene files -------------------------------------------------------------------------------
+
+/** One item in a scene file: a shape (colour, look) or a group (its members), with its pose. */
+export interface LabNode {
+  k: ObjectKind | 'group';
+  /** Shapes: '#rrggbb' and look. */
+  c?: string;
+  l?: ObjectLook;
+  /** Pose (10 numbers, see shared/scene.ts); relative to the group for members. */
+  p: number[];
+  /** Groups: their members. */
+  m?: LabNode[];
+}
+
+const KINDS: readonly LabNode['k'][] = ['cube', 'sphere', 'cylinder', 'plane', 'torus', 'group'];
+const LOOK_NAMES: readonly ObjectLook[] = ['solid', 'glow', 'glass'];
+/** A loaded scene's limits (untrusted files). */
+const SCENE_LIMITS = { items: 2000, depth: 8 };
+
+export function itemToNode(lab: LabScene, item: LabItem): LabNode {
+  const p = objectPoseToJson(item.object);
+  if (item.kind !== 'group') {
+    return { k: item.kind, c: `#${item.color.toString(16).padStart(6, '0')}`, l: item.look, p };
+  }
+  const m: LabNode[] = [];
+  for (const child of item.object.children) {
+    const member = lab.itemOf(child);
+    if (member) m.push(itemToNode(lab, member));
+  }
+  return { k: 'group', p, m };
+}
+
+/** Check untrusted nodes (all of them, before anything is built). Null if any is wrong. */
+export function parseLabNodes(raw: unknown): LabNode[] | null {
+  let count = 0;
+  const parse = (v: unknown, depth: number): LabNode | null => {
+    if (!isRecord(v) || ++count > SCENE_LIMITS.items || depth > SCENE_LIMITS.depth) return null;
+    const k = KINDS.find((x) => x === v.k);
+    if (!k || !poseFromJson(v.p, makePose())) return null;
+    const p = v.p as number[];
+    if (k !== 'group') {
+      const l = LOOK_NAMES.find((x) => x === v.l);
+      return isHexColor(v.c) && l ? { k, c: v.c, l, p } : null;
+    }
+    if (!Array.isArray(v.m)) return null;
+    const m: LabNode[] = [];
+    for (const child of v.m as unknown[]) {
+      const node = parse(child, depth + 1);
+      if (!node) return null;
+      m.push(node);
+    }
+    return { k, p, m };
+  };
+  if (!Array.isArray(raw)) return null;
+  const out: LabNode[] = [];
+  for (const v of raw as unknown[]) {
+    const node = parse(v, 0);
+    if (!node) return null;
+    out.push(node);
+  }
+  return out;
+}
+
+/** Items (not yet in the scene) from checked nodes. */
+export function nodeToItem(lab: LabScene, node: LabNode): LabItem {
+  const item =
+    node.k === 'group'
+      ? lab.makeGroup()
+      : lab.makeShape(node.k, parseInt((node.c ?? '#ffffff').slice(1), 16), node.l ?? 'solid');
+  const pose = makePose();
+  poseFromJson(node.p, pose);
+  applyPose(item.object, pose);
+  for (const child of node.m ?? []) item.object.add(nodeToItem(lab, child).object);
+  if (item.kind !== 'group') lab.style(item, 0);
+  return item;
 }
 
 // --- moving the selection as one ---------------------------------------------------------------

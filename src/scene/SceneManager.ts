@@ -36,9 +36,12 @@ export class SceneManager {
     return this.renderer.domElement;
   }
 
+  /** Most device pixels per CSS pixel (Settings → Quality); applied on the next setSize. */
+  maxPixelRatio: number = TUNING.scene.maxPixelRatio;
+
   /** Returns true if the size changed. */
   setSize(width: number, height: number): boolean {
-    const dpr = Math.min(window.devicePixelRatio || 1, TUNING.scene.maxPixelRatio);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.maxPixelRatio);
     if (width === this.width && height === this.height && dpr === this.renderer.getPixelRatio()) {
       return false;
     }

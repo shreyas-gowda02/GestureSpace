@@ -4,6 +4,7 @@
 import type * as THREE from 'three';
 import type { KeyAction } from '@/config/keybindings';
 import type {
+  Command,
   DrawTool,
   InteractionFrame,
   ModeId,
@@ -107,8 +108,15 @@ export interface SpatialMode {
   exit(): void;
   /** Free every GPU resource (§2 rule 6). */
   dispose(): void;
+  /**
+   * This experience's content as plain JSON (autosave, Save, Export, §22) — never camera frames.
+   */
   serialize?(): unknown;
-  deserialize?(data: unknown): void;
+  /**
+   * A command that replaces the content with `data` (untrusted: null if it isn't a valid scene for
+   * this experience). Undo puts back exactly what was there before.
+   */
+  sceneCommand?(data: unknown): Command | null;
 }
 
 export type ModeFactory = () => SpatialMode;

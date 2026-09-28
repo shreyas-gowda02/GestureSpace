@@ -19,9 +19,14 @@ export type ModeId = (typeof MODE_IDS)[number];
 
 export type QualityPreset = 'low' | 'medium' | 'high';
 export type InferenceRate = 15 | 30 | 60;
+export type CameraResolution = '480p' | '720p' | '1080p';
 
-/** User settings (§21.8). Edited in the Settings panel (Phase 12); defaults in config/tuning.ts. */
+/**
+ * User settings (§21.8): the Settings panel edits them, `state/persistence.ts` keeps them in
+ * localStorage (versioned); defaults in config/tuning.ts.
+ */
 export interface Settings {
+  /** The hand that builds / draws / picks; the other one helps (depth dial, eraser fist…). */
   dominant: HandSide;
   mirror: boolean;
   /** 0..1 visual smoothing slider (0 = most responsive). */
@@ -30,6 +35,18 @@ export interface Settings {
   inferenceHz: InferenceRate;
   quality: QualityPreset;
   depthLockDefault: boolean;
+  /** 0..1: 0 = fingers must really touch to pinch, 1 = a pinch registers early. 0.5 = default. */
+  pinchSensitivity: number;
+  /** × how far things turn / resize for a given hand movement (two-hand grab, fist turn). */
+  turnSensitivity: number;
+  scaleSensitivity: number;
+  cameraResolution: CameraResolution;
+  /** A chosen camera ('' = the browser's default). */
+  cameraDeviceId: string;
+  /** For cameras that already mirror their picture: MediaPipe then names the hands the wrong way. */
+  swapHands: boolean;
+  /** Fewer animations (pop-ins, openings); starts from the system's reduce-motion setting. */
+  reduceMotion: boolean;
 }
 
 /** Undoable edit. Every scene mutation in an editing mode goes through one. */

@@ -7,6 +7,7 @@
 
 import { TUNING } from '@/config/tuning';
 import type {
+  Command,
   DrawTool,
   DrawUiState,
   HandGestures,
@@ -16,8 +17,10 @@ import type {
 } from '@/core/types';
 import { singleHandPinchAllowed } from '@/gestures/GestureEngine';
 import { INDEX_TIP } from '@/vision/landmarks';
+import { isHexColor, isRecord } from '../shared/scene';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import {
+  makeStroke,
   StrokeBuilder,
   strokeHit,
   StrokeListCommand,
@@ -27,6 +30,8 @@ import {
 } from './strokes';
 
 const D = TUNING.draw;
+/** A loaded drawing's limits (untrusted files): strokes, points per stroke, width. */
+const LIMITS = { strokes: 5000, points: 100_000, width: 0.2 };
 const PEN_ID = 'draw-pen';
 const ERASER_ID = 'draw-eraser';
 
@@ -85,6 +90,40 @@ export class DrawMode implements SpatialMode {
   /** The drawing (tests / debug). */
   get strokeList(): readonly Stroke[] {
     return this.strokes;
+  }
+
+  /** The strokes: colour, width, glow and points (view units, 5 decimals ≈ 0.01 px). */
+  serialize(): unknown {
+    return {
+      v: 1,
+      strokes: this.strokes.map((st) => ({
+        color: st.color,
+        width: st.width,
+        glow: st.glow,
+        points: Array.from(st.points, (n) => Math.round(n * 1e5) / 1e5),
+      })),
+    };
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    if (!isRecord(data) || data.v !== 1 || !Array.isArray(data.strokes)) return null;
+    if (data.strokes.length > LIMITS.strokes) return null;
+    const after: Stroke[] = [];
+    for (const raw of data.strokes as unknown[]) {
+      if (!isRecord(raw) || !isHexColor(raw.color) || typeof raw.glow !== 'boolean') return null;
+      const { width, points } = raw;
+      if (typeof width !== 'number' || !(width > 0 && width <= LIMITS.width)) return null;
+      if (!Array.isArray(points) || points.length < 2 || points.length % 2) return null;
+      if (points.length > LIMITS.points * 2) return null;
+      const buf = new Float32Array(points.length);
+      for (let i = 0; i < points.length; i++) {
+        const v: unknown = points[i];
+        if (typeof v !== 'number' || !(v >= -1 && v <= 2)) return null; // view units (± margin)
+        buf[i] = v;
+      }
+      after.push(makeStroke(this.nextId++, { color: raw.color, width, glow: raw.glow }, buf));
+    }
+    return new StrokeListCommand('Load scene', this.setStrokes, this.strokes, after);
   }
 
   enter(ctx: ModeContext): void {

@@ -7,7 +7,14 @@
 
 import * as THREE from 'three';
 import { TUNING } from '@/config/tuning';
-import type { HandSide, InteractionFrame, PortalUiState, PortalWorld, Vec2 } from '@/core/types';
+import type {
+  Command,
+  HandSide,
+  InteractionFrame,
+  PortalUiState,
+  PortalWorld,
+  Vec2,
+} from '@/core/types';
 import { CoverSync } from '../shared/glsl';
 import {
   imageSource,
@@ -16,9 +23,11 @@ import {
   TextureSurface,
 } from '../shared/TextureSurface';
 import { applyPose, makePose, TwoHandTransform } from '../shared/TwoHandTransform';
+import { isRecord, objectPoseToJson, poseFromJson, stateCommand } from '../shared/scene';
 import type { ModeAction, ModeContext, SpatialMode } from '../types';
 import {
   OtherWorld,
+  PORTAL_WORLDS,
   portalContent,
   portalUniforms,
   stepWorld,
@@ -95,7 +104,7 @@ export class PortalMode implements SpatialMode {
     const began = grip.update(ctx, frame, this.now);
     if (began && this.openK === 0) this.openedAt = this.now; // first grab: open out of the line
     if (this.openedAt > -Infinity) {
-      const k = Math.min(1, (this.now - this.openedAt) / PT.openMs);
+      const k = ctx.settings.reduceMotion ? 1 : Math.min(1, (this.now - this.openedAt) / PT.openMs);
       this.openK = 1 - (1 - k) ** 3;
     }
     surface.setOpen(this.openK);
@@ -147,6 +156,32 @@ export class PortalMode implements SpatialMode {
       default:
         return false;
     }
+  }
+
+  /** The portal's place, world and whether it is open. */
+  serialize(): unknown {
+    const o = this.surface?.object;
+    if (!o) return undefined;
+    return { v: 1, world: this.current, open: this.openK > 0, pose: objectPoseToJson(o) };
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    const o = this.surface?.object;
+    const pose = makePose();
+    if (!o || !isRecord(data) || data.v !== 1 || !poseFromJson(data.pose, pose)) return null;
+    const world = PORTAL_WORLDS.find((w) => w.id === data.world)?.id;
+    if (!world || typeof data.open !== 'boolean') return null;
+    type State = { world: PortalWorld; open: boolean };
+    const apply = (st: State): void => {
+      if (st.world !== this.current) this.setWorld(st.world);
+      this.openK = st.open ? 1 : 0; // no opening animation: it simply is open (or shut)
+      this.openedAt = -Infinity;
+      this.surface?.setOpen(this.openK);
+      this.uiDirty = true;
+      this.flushUi(true);
+    };
+    const now: State = { world: this.current, open: this.openK > 0 };
+    return stateCommand(o, apply, now, { world, open: data.open }, pose);
   }
 
   /** Clear (C): nothing to clear in a portal. */

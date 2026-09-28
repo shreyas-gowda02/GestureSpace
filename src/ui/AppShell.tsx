@@ -16,8 +16,9 @@ import { MODE_META } from '@/modes/registry';
 import { useAppStore, type CameraStatus } from '@/state/appStore';
 import { DebugPanel } from './DebugPanel';
 import { ModeDock } from './ModeDock';
+import { HelpOverlay, Onboarding, SettingsPanel } from './overlays';
 import { PermissionScreen, TrackerNotice } from './PermissionScreen';
-import { ModeTools } from './toolPanels';
+import { ModeTools, SceneTools } from './toolPanels';
 
 const CAMERA_LABEL: Record<CameraStatus, string> = {
   idle: 'Camera off',
@@ -60,6 +61,7 @@ function TopBar() {
         type="button"
         className="gs-btn gs-btn--ghost"
         aria-pressed={helpOpen}
+        title="Help (H)"
         onClick={toggleHelp}
       >
         Help
@@ -111,6 +113,7 @@ function ToolPanel() {
           <h2 className="gs-toolpanel__heading">{meta.name}</h2>
           <p className="gs-muted">{meta.tagline}</p>
           <ModeTools mode={activeMode} />
+          <SceneTools />
           <h3 className="gs-toolpanel__sub">Gestures</h3>
           <ul className="gs-helplist">
             {meta.help.map((h) => (
@@ -223,8 +226,9 @@ function Stage() {
 }
 
 export function AppShell() {
+  const reduceMotion = useAppStore((s) => s.settings.reduceMotion);
   return (
-    <div className="gs-app">
+    <div className={`gs-app${reduceMotion ? ' is-reduced-motion' : ''}`}>
       <Stage />
       <PermissionScreen />
       <TrackerNotice />
@@ -233,6 +237,9 @@ export function AppShell() {
       <ModeDock />
       <ToolPanel />
       <StatusBar />
+      <Onboarding />
+      <HelpOverlay />
+      <SettingsPanel />
     </div>
   );
 }

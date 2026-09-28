@@ -245,11 +245,14 @@ export class TwoHandTransform {
     const { base, object } = this;
     const range = this.opts.scaleRange;
     const baseSize = base.scale.x;
-    let size = baseSize * Math.exp(this.logScale);
+    // Settings → Turn / Resize sensitivity (1 = each pinch stays on its spot of the object).
+    const settings = this.ctx?.settings;
+    let size = baseSize * Math.exp(this.logScale * (settings?.scaleSensitivity ?? 1));
     if (range) size = Math.min(range.max, Math.max(range.min, size));
     const k = size / baseSize;
     // View y points down, scene y up: a clockwise hand line is a negative turn about the axis.
-    this.q.setFromAxisAngle(this.axis, -this.turn * T.ROTATION_SENSITIVITY);
+    const turn = this.turn * T.ROTATION_SENSITIVITY * (settings?.turnSensitivity ?? 1);
+    this.q.setFromAxisAngle(this.axis, -turn);
     object.quaternion.copy(this.q).multiply(base.quaternion);
     object.position
       .copy(base.position)
@@ -406,8 +409,9 @@ export class FistOrbit {
       this.anchor(hand); // turning starts from here: the dead zone never shows as a jump
       return;
     }
-    const yaw = (this.palm.x * aspect - this.start.x) * O.radPerViewHeight;
-    const pitch = (this.palm.y - this.start.y) * O.radPerViewHeight;
+    const rate = O.radPerViewHeight * ctx.settings.turnSensitivity; // Settings → Turn sensitivity
+    const yaw = (this.palm.x * aspect - this.start.x) * rate;
+    const pitch = (this.palm.y - this.start.y) * rate;
     const step = O.maxTurnRate * frame.dt;
     this.yaw += Math.min(step, Math.max(-step, yaw - this.yaw));
     this.pitch += Math.min(step, Math.max(-step, pitch - this.pitch));

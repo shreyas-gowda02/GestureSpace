@@ -13,7 +13,7 @@ import {
 import { FEATURE_FLAGS, TUNING } from '@/config/tuning';
 import { downloadFixture, parseFixture } from '@/core/input';
 import type { SmoothingMode } from '@/vision/smoothing';
-import { useAppStore } from '@/state/appStore';
+import { useAppStore, type AppState } from '@/state/appStore';
 
 const f1 = (n: number): string => n.toFixed(1);
 const f2 = (n: number): string => n.toFixed(2);
@@ -142,8 +142,18 @@ function LeakCheck() {
   );
 }
 
+/** How much each experience holds (from the tool-panel state), e.g. "120 voxels · 4 strokes". */
+function contentSummary(ui: AppState['modeUi']): string {
+  const parts: string[] = [];
+  if (ui.voxel) parts.push(`${ui.voxel.count} voxels`);
+  if (ui.draw) parts.push(`${ui.draw.count} strokes`);
+  if (ui.objectLab) parts.push(`${ui.objectLab.count} objects`);
+  return parts.join(' · ');
+}
+
 export function DebugPanel() {
   const open = useAppStore((s) => s.debugOpen);
+  const content = useAppStore((s) => contentSummary(s.modeUi));
   const [snap, setSnap] = useState<DebugSnapshot | null>(null);
 
   useEffect(() => {
@@ -256,6 +266,10 @@ export function DebugPanel() {
             <Row label="GPU geometries / textures">
               {snap.renderer.geometries} / {snap.renderer.textures}
             </Row>
+            <Row label="JS heap">
+              {snap.heapMb === null ? '—' : `${Math.round(snap.heapMb)} MB`}
+            </Row>
+            <Row label="Content">{content || '—'}</Row>
             <LeakCheck />
           </div>
 

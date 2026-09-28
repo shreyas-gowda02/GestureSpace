@@ -8,7 +8,8 @@ import {
   pointValue,
   thumbPinkyValue,
 } from '@/gestures/detectors';
-import { GestureEngine } from '@/gestures/GestureEngine';
+import { TUNING } from '@/config/tuning';
+import { GestureEngine, pinchThresholdScale } from '@/gestures/GestureEngine';
 import { GestureStateMachine } from '@/gestures/stateMachine';
 import { makeTwoHandState, TwoHandTracker } from '@/gestures/twoHand';
 import { makeGestureState } from '@/gestures/stateMachine';
@@ -274,5 +275,33 @@ describe('GestureEngine.swapSides (D42)', () => {
     expect(g.left?.pinch.justStarted).toBe(false);
     expect(g.left?.pinch.justEnded).toBe(false);
     expect(g.right).toBeUndefined();
+  });
+});
+
+describe('pinch sensitivity (Settings)', () => {
+  const P = TUNING.gestures.pinch;
+  const K = TUNING.settings.pinchScale;
+
+  it('0 = strict … 0.5 = the tuned thresholds … 1 = easy, smoothly in between', () => {
+    expect(pinchThresholdScale(0)).toBeCloseTo(K.strict, 9);
+    expect(pinchThresholdScale(0.5)).toBe(1);
+    expect(pinchThresholdScale(1)).toBeCloseTo(K.easy, 9);
+    let prev = 0;
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+      const k = pinchThresholdScale(t);
+      expect(k).toBeGreaterThan(prev);
+      prev = k;
+    }
+  });
+
+  it('scales this engine’s pinch start / end only (another engine keeps its own)', () => {
+    const a = new GestureEngine();
+    const b = new GestureEngine();
+    a.setPinchSensitivity(1);
+    expect(a.pinchThresholds.start).toBeCloseTo(P.start * K.easy, 9);
+    expect(a.pinchThresholds.end).toBeCloseTo(P.end * K.easy, 9);
+    expect(b.pinchThresholds).toEqual({ start: P.start, end: P.end });
+    a.setPinchSensitivity(0.5);
+    expect(a.pinchThresholds).toEqual({ start: P.start, end: P.end });
   });
 });

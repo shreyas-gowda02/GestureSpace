@@ -5,7 +5,14 @@
 // animated pattern, or the user's own picture (tool panel).
 
 import { TUNING } from '@/config/tuning';
-import type { InteractionFrame, PanelContent, PanelSampleId, PanelUiState } from '@/core/types';
+import type {
+  Command,
+  InteractionFrame,
+  PanelContent,
+  PanelSampleId,
+  PanelUiState,
+} from '@/core/types';
+import { isRecord, objectPoseToJson, poseFromJson, stateCommand } from '../shared/scene';
 import { applyPose, makePose, TwoHandTransform } from '../shared/TwoHandTransform';
 import {
   cameraVideo,
@@ -25,7 +32,11 @@ const PANEL_ID = 'panel';
 const REST_POSE = makePose();
 REST_POSE.position.set(0, P.restY, 0);
 
-const isSample = (c: PanelContent): c is PanelSampleId => P.samples.some((s) => s.id === c);
+const isSample = (c: unknown): c is PanelSampleId => P.samples.some((s) => s.id === c);
+
+/** What a scene keeps of the panel's content: pictures and the pattern, never camera frames. */
+type KeptContent = PanelSampleId | 'animated' | null;
+const kept = (c: PanelContent): KeptContent => (isSample(c) || c === 'animated' ? c : null);
 
 export class PanelMode implements SpatialMode {
   readonly id = 'panel' as const;
@@ -85,6 +96,26 @@ export class PanelMode implements SpatialMode {
     this.uiDirty = true;
     this.flushUi(true);
     return true;
+  }
+
+  /** Where the panel is and which picture it shows (a camera picture or your file: not kept). */
+  serialize(): unknown {
+    const o = this.surface?.object;
+    return o ? { v: 1, content: kept(this.content), pose: objectPoseToJson(o) } : undefined;
+  }
+
+  sceneCommand(data: unknown): Command | null {
+    const o = this.surface?.object;
+    const pose = makePose();
+    if (!o || !isRecord(data) || data.v !== 1 || !poseFromJson(data.pose, pose)) return null;
+    const c = data.content;
+    if (c !== null && !isSample(c) && c !== 'animated') return null;
+    const apply = (content: KeptContent): void => {
+      if (content && content !== this.content) this.show(content);
+      this.uiDirty = true;
+      this.flushUi(true);
+    };
+    return stateCommand(o, apply, kept(this.content), c, pose);
   }
 
   /** Clear (C): nothing to clear on a panel. */

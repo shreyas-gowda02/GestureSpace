@@ -4,6 +4,9 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
+  // Each test runs a browser drawing WebGL in software plus MediaPipe on the fake camera: more
+  // than ~6 at once starve each other of CPU (16 tests on 10 workers timed out, Phase 12).
+  workers: 6,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? 'github' : 'list',
