@@ -3,7 +3,7 @@
 The user guide: every control of every experience, kept up to date whenever a feature is built or
 changed. If the app and this file disagree, the file is out of date. Please say so.
 
-_Last updated: 2026-09-28, Air Draw: keep the finger out 2 s before a line starts._
+_Last updated: 2026-10-05, Voxel Builder: Clear also straightens the grid._
 
 | Key | Experience          | Status                                                                  |
 | --- | ------------------- | ----------------------------------------------------------------------- |
@@ -212,7 +212,10 @@ New blocks go on the **active layer** (the faint grid). The tool panel shows it 
 
 - **Ctrl+Z / Undo:** each line, block, push / pull, erase, paint, two-hand move, fist turn and
   Reset is **one step**.
-- **C / Clear:** removes every block (one undoable step).
+- **C / Clear:** a fresh start. It removes every block **and** puts the structure and its grid
+  back to the starting position, size and 3/4 angle, on layer 0, so a grid you had turned lines
+  up again. One undoable step: **Ctrl+Z** brings the blocks, the angle and the layer back. With no
+  blocks, it still straightens a turned grid.
 - **R / Reset:** puts the structure back to its starting position, size and 3/4 angle. Undoable,
   so Ctrl+Z brings your view back.
 - Pressing Undo in the middle of a line or grab finishes it first, then undoes it.
@@ -779,6 +782,8 @@ Press **`** (backtick) or click **Debug**.
 
 ## Changelog of controls
 
+- **2026-10-05** — Voxel Builder: **Clear also resets the view and the layer**, so the empty grid
+  lines up as it did at the start (it used to stay turned). One undo step brings everything back.
 - **2026-09-28** — Air Draw: **keep the pointing finger out 2 seconds before a line starts** (a
   ring fills round the fingertip and the status bar counts down); lowering it earlier draws
   nothing. Every line waits; the erasers don't.

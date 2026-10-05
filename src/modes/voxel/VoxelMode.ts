@@ -311,12 +311,37 @@ export class VoxelMode implements SpatialMode {
     };
   }
 
-  /** Clear (C): every voxel removed as one undoable step. */
+  /**
+   * Clear (C): a fresh start as one undoable step — every voxel removed, the structure back to its
+   * starting view (position, size, 3/4 angle) and the build layer back to 0, so the grid lines up as
+   * it did at the start (the user's request: after turning a structure and clearing it, the empty
+   * grid stayed turned). Undo brings the voxels, the view and the layer back.
+   */
   reset(): void {
-    const { ctx, grid } = this;
-    if (!ctx || grid.count === 0) return;
+    const { ctx, grid, root } = this;
+    if (!ctx || !root) return;
     this.endStroke(true);
-    ctx.history.execute(clearCommand(grid));
+    this.transform?.cancel();
+    this.orbit?.cancel();
+    const viewBefore = readPose(root, makePose());
+    const layerBefore = this.layer;
+    if (grid.count === 0 && layerBefore === 0 && samePose(viewBefore, VIEW_POSE)) return;
+    const edit = clearCommand(grid);
+    ctx.history.execute({
+      label: edit.label,
+      do: () => {
+        edit.do();
+        applyPose(root, VIEW_POSE);
+        this.setLayer(0);
+        this.uiDirty = true;
+      },
+      undo: () => {
+        edit.undo();
+        applyPose(root, viewBefore);
+        this.setLayer(layerBefore);
+        this.uiDirty = true;
+      },
+    });
   }
 
   /**

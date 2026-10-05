@@ -693,6 +693,42 @@ describe('VoxelMode: two hands, tools, lifecycle', () => {
     expect(mode.grid.count).toBe(2);
   });
 
+  it('Clear is a fresh start: the turned, moved, resized grid and the layer go back to how they began', () => {
+    const { rig, mode, root } = voxelRig();
+    const start = { q: root.quaternion.clone(), p: root.position.clone(), s: root.scale.clone() };
+    stroke(rig, root, { x: 1, y: 0, z: 0 });
+    // A fist turn / two-hand grab leaves the structure turned, moved and bigger; the layer is +2.
+    root.quaternion.setFromEuler(new THREE.Euler(1.1, -0.9, 0.4));
+    root.position.set(3, -2, 1);
+    root.scale.setScalar(1.6);
+    rig.mc.handleAction({ type: 'depthUp' });
+    rig.mc.handleAction({ type: 'depthUp' });
+    const turned = root.quaternion.clone();
+    rig.mc.clear();
+    expect(mode.grid.count).toBe(0);
+    expect(root.quaternion.angleTo(start.q)).toBeLessThan(1e-6);
+    expect(root.position.distanceTo(start.p)).toBeLessThan(1e-9);
+    expect(root.scale.distanceTo(start.s)).toBeLessThan(1e-9);
+    rig.run(7); // the tool panel hears at most 10× a second
+    expect(lastUi(rig)?.layer).toBe(0);
+    rig.mc.undo(); // one step brings the voxels, the turn and the layer back
+    rig.run(7);
+    expect(mode.grid.count).toBe(1);
+    expect(root.quaternion.angleTo(turned)).toBeLessThan(1e-6);
+    expect(root.scale.x).toBeCloseTo(1.6);
+    expect(lastUi(rig)?.layer).toBe(2);
+    rig.mc.redo();
+    expect(root.quaternion.angleTo(start.q)).toBeLessThan(1e-6);
+
+    // An empty but turned grid straightens too; an untouched one adds no undo step.
+    root.quaternion.setFromEuler(new THREE.Euler(0.5, 0.5, 0));
+    rig.mc.clear();
+    expect(root.quaternion.angleTo(start.q)).toBeLessThan(1e-6);
+    rig.mc.clear(); // nothing to clear, already straight: no new step…
+    rig.mc.undo(); // …so one undo brings the turn back
+    expect(root.quaternion.angleTo(start.q)).toBeGreaterThan(0.1);
+  });
+
   it('left/right renamed mid-stroke (D42): the renamed hand keeps painting the same stroke', () => {
     const { rig, mode, root } = voxelRig();
     aimAt(rig, root, { x: -3, y: 0, z: 0 });
