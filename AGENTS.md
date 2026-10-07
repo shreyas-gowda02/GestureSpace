@@ -124,6 +124,7 @@ tests/        unit/ · integration/ · e2e/
               integration/realHands.test.ts — run it after any tracking/gesture change)
 scripts/      copy-mediapipe-assets.mjs · fetch-model.mjs · make-fixtures.ts (node runs TS)
 docs/         (P13, per §28) ARCHITECTURE, GESTURES, MODES, PERFORMANCE, TROUBLESHOOTING
+              USE_CASES.md (real-world use cases and where the concepts apply; user request)
 ```
 
 ## Core contracts (`src/core/types/`)

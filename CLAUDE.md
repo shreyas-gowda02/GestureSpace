@@ -1004,3 +1004,9 @@ gestureEngine.capturing)` → `renderFrame` (WebGL, overlay skeletons + gesture 
   asked what Phase 13 is (explained; still not started), then sent two screenshots from their real
   camera: after a turned structure was cleared, the empty grid stayed turned. Clear now also resets
   the view and the layer in the same undo step; a new test fails without it (sabotage-checked).
+- **2026-10-08 — Session 2 (cont.). docs/USE_CASES.md.** The user asked for a detailed document of
+  real-world use cases for the project or its concepts. Wrote it: the reusable building blocks with
+  measured proof, honest limits, 26 use cases in 10 areas (who / problem / how / reuse / changes /
+  size / risks), concepts that travel beyond hands, a comparison table, capabilities that unlock
+  several cases, risks, and a pilot plan. Top picks: kiosks, gesture presenter, hand-exercise
+  companion, gesture SDK, creator effects. Phase 13 still not started.
